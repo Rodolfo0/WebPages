@@ -14,14 +14,13 @@ Crear una aplicación web para usuarios externos que permita:
 - Subir y reutilizar imágenes.
 - Publicar cada sitio en una subruta pública, por ejemplo `/s/mi-portafolio`.
 - Recibir mensajes del formulario de contacto en una bandeja interna.
-- Exportar el sitio usando una plantilla Astro.
 
-El editor y la publicación pública usarán React. Astro funcionará como formato de exportación para evitar generar un build separado en cada publicación.
+El editor y la publicación pública usarán React. Astro queda como una fase posterior para exportar proyectos portables sin convertirlo en un requisito de publicación.
 
 ## Cambios principales
 
 - Construir el editor con React y una interfaz de canvas, panel lateral y vista previa responsive.
-- Definir un esquema versionado `SiteDocument` como fuente única para React y Astro.
+- Definir un esquema versionado `SiteDocument` como fuente única para el editor y la publicación, con posibilidad de reutilizarlo en una futura exportación Astro.
 - Crear un registro de bloques con:
   - Presentación.
   - Sobre mí.
@@ -36,19 +35,12 @@ El editor y la publicación pública usarán React. Astro funcionará como forma
 - Añadir reordenamiento por arrastre y controles equivalentes para teclado.
 - Guardar borradores automáticamente y crear una versión inmutable al publicar.
 - Usar D1 para usuarios, proyectos, documentos, versiones y mensajes.
-- Usar R2 para imágenes y archivos exportados.
+- Usar R2 para imágenes.
 - Validar todos los documentos y cambios del editor en el servidor.
 - Verificar permisos del propietario en cada operación privada.
 - Servir únicamente la versión publicada en las URLs públicas.
 - Añadir protección básica al formulario público mediante honeypot, validación y límite de envíos.
 - Integrar la autenticación mediante una librería o servicio reconocido y mantenido, sin crear desde cero el registro, el hashing de contraseñas, las sesiones, la recuperación de acceso ni la verificación de email.
-- Crear un exportador Astro que genere:
-  - `src/pages/index.astro`.
-  - Datos del sitio en JSON.
-  - Estilos y tokens del tema.
-  - Imágenes usadas.
-  - Configuración mínima para ejecutar el proyecto Astro.
-
 Modelo base:
 
 ```ts
@@ -76,7 +68,7 @@ type BlockInstance = {
 }
 ```
 
-## Generación de Astro y decisión arquitectónica
+## Trabajo posterior al MVP: generación y exportación Astro
 
 Astro se usará como formato de salida y no como requisito para cada publicación. El editor conservará un único documento `SiteDocument`; React lo utilizará para el editor y para la URL administrada, mientras que el exportador lo convertirá en un proyecto Astro.
 
@@ -104,12 +96,10 @@ type BlockDefinition = {
 
 La plantilla Astro tendrá un componente por bloque y rechazará tipos desconocidos. No se permitirá que el contenido del usuario genere archivos `.ts`, `.js` o componentes ejecutables. Esto reduce el riesgo de inyección y hace que el exportador sea predecible.
 
-### Qué se publica en el MVP
+### Relación con la publicación del MVP
 
 - La URL administrada, por ejemplo `/s/mi-portafolio`, se renderiza con React usando únicamente la versión publicada.
-- La exportación Astro se ejecuta bajo demanda y se descarga como proyecto independiente.
 - El formulario con bandeja interna está garantizado para la URL administrada.
-- El export Astro incluirá enlaces de contacto por defecto. Un formulario conectado a la bandeja interna requerirá configurar en el proyecto exportado la URL pública de recepción, el identificador del sitio y las variables necesarias. No se intentará incluir credenciales privadas dentro del ZIP.
 
 ### Dominios en una fase posterior
 
@@ -160,9 +150,8 @@ Si el producto demuestra que los sitios necesitan SEO avanzado, rendimiento est�
 - El formulario guarda mensajes en la bandeja del propietario.
 - La página pública funciona en móvil y escritorio.
 - Los controles principales funcionan con teclado.
-- El exportador genera un proyecto Astro válido usando el mismo `SiteDocument`.
 - Se verifican colisiones de slug, archivos no permitidos, imágenes demasiado grandes y envíos abusivos.
-- El build de React y el flujo de exportación Astro terminan correctamente.
+- El build de React termina correctamente.
 
 ## Supuestos y límites
 
@@ -172,4 +161,4 @@ Si el producto demuestra que los sitios necesitan SEO avanzado, rendimiento est�
 - La URL pública usará una subruta administrada, no subdominios.
 - En una fase posterior se podrá asociar un dominio propio a cada proyecto, usar subdominios de un dominio compartido o servir varios proyectos como subrutas de un dominio propio compartido.
 - El proveedor de autenticación gestionada debe estar disponible antes de implementar el acceso público.
-- Astro será una salida exportable y reutilizable. Si la generación de archivos resulta incompatible con el runtime de Sites, la publicación seguirá usando React sin duplicar la lógica de bloques.
+- La exportación Astro queda fuera del MVP y se implementará después de validar el flujo de publicación React.

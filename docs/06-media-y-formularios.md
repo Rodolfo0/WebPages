@@ -44,4 +44,4 @@ La bandeja privada permitirá listar mensajes, abrir el detalle, marcar como le�
 
 La URL administrada puede conectar el formulario con la bandeja interna. Un export Astro descargado en otro hosting no tendrá automáticamente esa capacidad porque no debe incluir credenciales privadas.
 
-En el MVP, el export incluirá enlaces de email, teléfono y redes. Si se necesita un formulario conectado, el proyecto exportado tendrá que recibir una URL pública y una configuración explícita del endpoint.
+En una fase posterior al MVP, el export incluirá enlaces de email, teléfono y redes. Si se necesita un formulario conectado, el proyecto exportado tendrá que recibir una URL pública y una configuración explícita del endpoint.

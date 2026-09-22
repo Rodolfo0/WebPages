@@ -31,7 +31,9 @@ Este documento resume las librerías actuales y las dependencias propuestas para
 - `eslint`: revisión de calidad del código.
 - `eslint-config-next`: reglas de ESLint para React y Next.
 
-## Dependencias propuestas para el MVP
+## Dependencias propuestas para el producto
+
+La exportación Astro queda fuera del MVP. Las dependencias relacionadas con ZIP y la estructura de exportación se mantienen documentadas para una fase posterior.
 
 | Librería | Propósito |
 | --- | --- |

@@ -19,7 +19,6 @@ Crear un constructor sencillo para personas que necesitan publicar una página p
 5. Guarda un borrador y revisa la vista previa.
 6. Publica una versión en una subruta administrada.
 7. Consulta los mensajes recibidos desde el bloque de contacto.
-8. Opcionalmente exporta el proyecto como sitio Astro.
 
 ## Qué debe sentirse sencillo
 
@@ -40,7 +39,6 @@ El MVP incluye:
 - Publicación en subruta administrada.
 - Subida y reutilización de imágenes.
 - Bloque de contacto con bandeja interna.
-- Exportación de un proyecto Astro.
 
 ## Fuera del MVP
 
@@ -51,6 +49,7 @@ El MVP incluye:
 - Analítica avanzada.
 - Formularios enviados por email.
 - Sistema completo de temas creados por usuarios.
+- Exportación del proyecto como sitio Astro.
 
 ## Éxito de la primera versión
 
@@ -62,4 +61,3 @@ Las métricas que conviene medir después del lanzamiento son:
 - Porcentaje de proyectos que llegan a publicar.
 - Cantidad de bloques editados por proyecto.
 - Porcentaje de usuarios que regresan para modificar un sitio.
-- Cantidad de exportaciones Astro solicitadas.

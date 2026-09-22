@@ -38,8 +38,6 @@
 - Un slug inexistente devuelve una página de error apropiada.
 - El HTML inicial contiene título y descripción del sitio.
 - La publicación nueva reemplaza la anterior.
-- El export Astro contiene todos los assets referenciados.
-- El ZIP no incluye secretos ni archivos generados por el usuario.
 - Dos proyectos no pueden reclamar la misma combinación de dominio y ruta cuando se habilite esa función.
 
 ## Fases sugeridas
@@ -67,14 +65,21 @@
 - SEO básico.
 - Formulario y bandeja interna.
 
-### Fase 4: exportación
+### Fase 4: cierre del MVP
+
+- Pruebas unitarias, de integración y E2E.
+- Revisión de autorización y validaciones de seguridad.
+- Validación del build React y del despliegue.
+- Verificación del flujo completo de registro a publicación y mensajes.
+
+### Fase 5: exportación posterior al MVP
 
 - Plantilla Astro.
 - Renderizadores Astro de los bloques iniciales.
 - ZIP descargable.
-- Pruebas de build.
+- Pruebas de build y ausencia de secretos.
 
-### Fase 5: expansión
+### Fase 6: expansión
 
 - Plantillas de restaurante y landing general.
 - Dominios propios.
