@@ -38,6 +38,19 @@ async function readCredentials(request: Request): Promise<Credentials | null> {
   }
 }
 
+async function readEmail(request: Request): Promise<string | null> {
+  try {
+    const body: unknown = await request.json();
+    if (!body || typeof body !== 'object') return null;
+
+    const { email } = body as Record<string, unknown>;
+    if (typeof email !== 'string' || !email.trim()) return null;
+    return email.trim();
+  } catch {
+    return null;
+  }
+}
+
 function createClient(request: Request, bindings: SupabaseAuthBindings) {
   try {
     return createSupabaseServerClient(request, bindings);
@@ -82,6 +95,46 @@ export async function handleAuthSignUp(
         200,
       ),
     );
+  } catch {
+    return server.applyAuthResponse(
+      jsonResponse({ error: 'auth_provider_unavailable' }, 502),
+    );
+  }
+}
+
+export async function handleAuthResendSignupConfirmation(
+  request: Request,
+  bindings: SupabaseAuthBindings,
+) {
+  const email = await readEmail(request);
+  if (!email) {
+    return jsonResponse({ error: 'email_required' }, 400);
+  }
+
+  const server = createClient(request, bindings);
+  if (!server) return jsonResponse({ error: 'supabase_not_configured' }, 503);
+
+  try {
+    const emailRedirectTo = new URL('/auth/callback', request.url).toString();
+    const { error } = await server.client.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo },
+    });
+
+    if (error) {
+      return server.applyAuthResponse(
+        jsonResponse(
+          {
+            error: 'confirmation_resend_failed',
+            message: 'No se pudo solicitar el correo. Espera un momento e inténtalo de nuevo.',
+          },
+          400,
+        ),
+      );
+    }
+
+    return server.applyAuthResponse(jsonResponse({ sent: true }, 200));
   } catch {
     return server.applyAuthResponse(
       jsonResponse({ error: 'auth_provider_unavailable' }, 502),

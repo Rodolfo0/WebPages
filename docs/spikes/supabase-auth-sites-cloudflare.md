@@ -15,7 +15,7 @@ Por tanto, Supabase sigue siendo una opción viable para probar. Se añadió un 
 - `vite.config.ts` combina Vinext, `@openai/sites-vite-plugin` y `@cloudflare/vite-plugin`. El entorno de Cloudflare incluye `nodejs_compat` y separa los entornos `rsc` y `ssr`.
 - `package.json` y `package-lock.json` fijan `@supabase/ssr` 0.12.7 y `@supabase/supabase-js` 2.117.0.
 - Se añadió `GET /api/auth/session` como prueba de estructura: lee la sesión de la petición, consulta `auth.getUser()` en el servidor y devuelve solo el ID y correo del usuario. No expone tokens ni crea contraseñas o sesiones propias.
-- Se añadieron `POST /api/auth/signup`, `POST /api/auth/login` y `POST /api/auth/logout`, además de `/auth/callback` para intercambiar el código PKCE de confirmación por una sesión de Supabase.
+- Se añadieron `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout` y `POST /api/auth/resend-confirmation`, además de `/auth/callback` para intercambiar el código PKCE de confirmación por una sesión de Supabase.
 - La pantalla inicial permite ejecutar esos flujos y muestra el resultado de `GET /api/auth/session`. Las contraseñas solo se reciben en memoria para enviarlas a Supabase; no se guardan en D1 ni en otra base propia.
 - `lib/auth/supabase-server.ts` crea un cliente por petición y delega lectura y serialización de cookies a `@supabase/ssr`. Las respuestas de esta ruta usan `Cache-Control: private, no-store`.
 - `.env.example` fija los nombres iniciales `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`; `env.d.ts` los tipa como bindings de Cloudflare. No se usa una clave `service_role`.
@@ -34,7 +34,13 @@ La copia `.env.local` sirve de plantilla; se deben reemplazar los valores con lo
 
 Para la prueba de runtime, el control plane de Cloudflare debe inyectar `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` como variables del Worker; en local se pueden cargar desde `.env.local`. En el proyecto Supabase de prueba también se deben habilitar email/contraseña, configurar el callback local y de preview, y usar una bandeja de correo controlada para confirmación y recuperación.
 
-Con las dependencias instaladas y las variables configuradas, ejecutar `npm run dev` y abrir `http://localhost:5173`. La pantalla ofrece registro, login y logout; al entrar, consulta la sesión con `GET /api/auth/session`. Para confirmar el correo, permitir `http://localhost:5173/auth/callback` (o `http://localhost:5173/**`) en **Authentication → URL Configuration → Redirect URLs**. El proyecto Supabase debe tener Email habilitado. Si la confirmación está activa, el registro avisa que se debe revisar el correo; al abrir el enlace, el callback intercambia el código y vuelve a la pantalla.
+Con las dependencias instaladas y las variables configuradas, ejecutar `npm run dev` y abrir `http://localhost:3000` (puerto predeterminado de Vinext). La pantalla ofrece registro, login y logout; al entrar, consulta la sesión con `GET /api/auth/session`.
+
+La ruta de confirmación de la aplicación ya existe en `GET /auth/callback`. El enlace del correo apunta primero a Supabase (`/auth/v1/verify`), que valida el token de un solo uso y redirige a `redirect_to`; en el flujo PKCE, Supabase agrega un `code`. La ruta intercambia ese código por una sesión con `exchangeCodeForSession()`, guarda las cookies de Supabase y vuelve a `/` con el estado de confirmación. La aplicación genera `redirect_to` usando el origen de la petición que hizo el registro.
+
+Si Supabase devuelve `error_code=otp_expired`, el callback muestra el estado de enlace vencido o usado y permite solicitar otro. El formulario envía el correo a `POST /api/auth/resend-confirmation`, que usa `auth.resend({ type: 'signup' })`; se debe abrir el correo más reciente en el mismo navegador donde se solicitó para conservar el verificador PKCE.
+
+En **Authentication → URL Configuration → Redirect URLs**, permitir el callback del puerto con el que se inició el registro, por ejemplo `http://localhost:3000/auth/callback` (o `http://localhost:3000/**`). La integración/E2E de Playwright usa el puerto `5180`, así que también se puede permitir `http://localhost:5180/**` para probar ese origen. Un correo ya enviado conserva el puerto incluido al registrarse: el enlace compartido apunta a `5173`, por lo que requiere un servidor accesible en ese puerto; para usar el servidor actual en `3000`, iniciar un registro nuevo desde `3000` y usar el nuevo correo. El proyecto Supabase debe tener Email habilitado.
 
 ## Compatibilidad y límites
 

@@ -9,6 +9,7 @@ type Mode = 'login' | 'signup';
 type ApiResult = {
   authenticated?: boolean;
   confirmationRequired?: boolean;
+  sent?: boolean;
   user?: AuthUser | null;
   error?: string;
   message?: string;
@@ -22,6 +23,7 @@ export default function AuthPlayground() {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [canResendConfirmation, setCanResendConfirmation] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function refreshSession() {
@@ -52,9 +54,14 @@ export default function AuthPlayground() {
   useEffect(() => {
     const authResult = new URLSearchParams(window.location.search).get('auth');
     if (authResult === 'confirmed') {
+      // Read the callback result from the browser URL after hydration.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessage('Correo confirmado. Ya puedes iniciar sesión.');
     } else if (authResult === 'callback_error') {
       setError('No se pudo completar la confirmación. Solicita un enlace nuevo.');
+    } else if (authResult === 'link_expired') {
+      setError('El enlace venció o ya se usó. Escribe tu correo y solicita uno nuevo.');
+      setCanResendConfirmation(true);
     }
 
     void refreshSession();
@@ -121,6 +128,34 @@ export default function AuthPlayground() {
       setUser(null);
       setView('signed_out');
       setMessage('Sesión cerrada.');
+    } catch {
+      setError('No se pudo conectar con el servidor de autenticación.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    setBusy(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/auth/resend-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const result = (await response.json()) as ApiResult;
+
+      if (!response.ok) {
+        setError(result.message ?? 'No se pudo solicitar otro enlace.');
+        return;
+      }
+
+      setMessage(
+        `Si ${email} tiene una cuenta pendiente, Supabase enviará un nuevo enlace. Revisa tu correo.`,
+      );
     } catch {
       setError('No se pudo conectar con el servidor de autenticación.');
     } finally {
@@ -257,6 +292,17 @@ export default function AuthPlayground() {
                       : 'Iniciar sesión'}
                 </button>
               </form>
+
+              {canResendConfirmation && mode === 'login' && (
+                <button
+                  type="button"
+                  onClick={resendConfirmation}
+                  disabled={busy || !email.trim()}
+                  className="mt-4 w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy ? 'Solicitando…' : 'Reenviar confirmación'}
+                </button>
+              )}
             </div>
           )}
 
