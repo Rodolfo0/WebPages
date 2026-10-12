@@ -22,6 +22,8 @@ Esta carpeta contiene el detalle técnico y de producto detrás de PLAN.md. El p
    Pipeline de exportación, componentes compartidos, límites y decisión de no usar Astro como runtime del MVP.
 9. [Pruebas y roadmap](09-pruebas-y-roadmap.md)  
    Estrategia de pruebas, fases de implementación y temas que conviene profundizar.
+10. [Spike: Supabase Auth con Sites y Cloudflare](spikes/supabase-auth-sites-cloudflare.md)
+    Evidencia de compatibilidad, límites observados y pruebas pendientes para el issue 1.
 
 ## Orden recomendado de lectura
 
