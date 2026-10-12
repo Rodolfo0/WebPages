@@ -29,6 +29,8 @@ Cada bloque debe tener una composición terminada. El usuario cambia el contenid
 
 La definición centraliza el nombre del bloque, sus valores iniciales, validación y renderizadores. El editor usa reactComponent; el exportador Astro usa astroComponentPath.
 
+Cada bloque es dueño de sus estilos. Su renderizador React debe conservar la misma apariencia en la vista pública y en el canvas, sin importar estilos del dashboard o depender de Mantine. Consulta [UI y estilos](12-ui-y-estilos.md) para la convención de aislamiento y el uso de tokens del tema.
+
 ## Propiedades permitidas
 
 Las propiedades iniciales deben cubrir:

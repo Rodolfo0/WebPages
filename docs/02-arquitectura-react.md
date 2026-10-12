@@ -10,6 +10,8 @@ React cubrirá tres superficies relacionadas:
 
 Las tres superficies deben consumir el mismo SiteDocument. El editor no debe producir un formato distinto al que usa la publicación.
 
+El dashboard y el editor comparten la convención de controles descrita en [UI y estilos](12-ui-y-estilos.md). El renderizador público tiene su propia entrada de estilos; no monta el shell ni el tema de Mantine del área privada.
+
 ## Organización lógica
 
 La estructura sigue una arquitectura por recursos (Screaming Architecture): el primer nivel después de las rutas nombra las capacidades del producto, y cada recurso contiene su implementación y sus pruebas.

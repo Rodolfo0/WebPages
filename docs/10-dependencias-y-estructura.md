@@ -79,7 +79,7 @@ pnpm add -D vitest jsdom @vitest/coverage-v8 \
 
 Estos comandos sirven como referencia para dependencias propuestas que todavía no estén instaladas. Usa pnpm y conserva el lockfile canónico. La integración de Supabase Auth con Sites y Cloudflare Workers está comprobada en [el spike de autenticación](spikes/supabase-auth-sites-cloudflare.md).
 
-Mantine se usará para los componentes funcionales de la aplicación, como el dashboard, los formularios y el panel del editor. Tailwind seguirá disponible para layouts, estilos específicos de los bloques y la apariencia de los sitios publicados. Ambos pueden convivir, siempre que se definan reglas claras para evitar estilos duplicados.
+La aplicación combina Mantine y Tailwind bajo las reglas de [UI y estilos](12-ui-y-estilos.md). Mantine proporciona los controles funcionales del producto; Tailwind resuelve la composición y el layout de la aplicación. Los bloques son dueños de sus estilos y el renderizador público los carga sin depender del dashboard ni de Mantine.
 
 ## Estructura lógica propuesta
 
