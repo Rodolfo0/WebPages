@@ -34,7 +34,7 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ mode }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
@@ -53,6 +53,9 @@ export default defineConfig(async () => {
       vinext(),
       sites(),
       cloudflare({
+        // Browser tests do not need DevTools; Miniflare's inspector binds to
+        // all interfaces, which is unavailable in some local test sandboxes.
+        inspectorPort: mode === 'test' ? false : undefined,
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         config: localBindingConfig,
       }),

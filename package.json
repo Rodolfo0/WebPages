@@ -10,6 +10,9 @@
     "build": "vinext build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "test:unit": "vitest run",
+    "test:integration": "playwright test --project=integration",
+    "test:e2e": "playwright test --project=e2e",
     "test:auth": "vitest run tests/auth",
     "db:generate": "drizzle-kit generate"
   },

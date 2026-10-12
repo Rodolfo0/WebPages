@@ -1,5 +1,45 @@
 # Pruebas y roadmap
 
+## Comandos de prueba
+
+Los tres niveles se ejecutan por separado:
+
+```sh
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+```
+
+- `test:unit` usa Vitest en Node para reglas y handlers; el test de
+  `AuthPlayground` cambia a JSDOM y usa React Testing Library.
+- `test:integration` levanta Vinext con el runtime local de Cloudflare en el
+  puerto `5180` y llama la ruta real de login contra el proyecto Supabase de
+  prueba. Usa credenciales incorrectas deliberadamente, por lo que no crea una
+  cuenta.
+- `test:e2e` recorre la interfaz con Playwright: inicia sesión con una cuenta de
+  prueba ya confirmada, valida la sesión en el servidor y cierra sesión. No crea
+  cuentas ni envía correos.
+
+### Configuración de integración y E2E
+
+1. Crea o elige un proyecto Supabase desechable, distinto al de desarrollo y
+   producción. Habilita Email/Password y deja activada la confirmación de
+   correo.
+2. Copia `.env.test.example` a `.env.test.local` y asigna la URL y la clave
+   publicable de ese proyecto. El archivo local está ignorado por Git.
+3. Crea una cuenta de prueba en ese proyecto, confirma su correo una sola vez y
+   añade su email y contraseña a `SUPABASE_E2E_EMAIL` y
+   `SUPABASE_E2E_PASSWORD` en `.env.test.local`.
+4. Ejecuta los comandos por separado. Playwright administra el Worker de prueba
+   en el puerto `5180`. Puede convivir con `npm run dev`, que Vinext ejecuta en
+   el puerto `3000` por defecto.
+   Si Playwright no encuentra Chromium en el equipo, instala el navegador con
+   `npx playwright install chromium`.
+
+El test de integración solo requiere las dos variables del proyecto. El E2E de
+login también requiere la cuenta confirmada. No guardes una clave `service_role`
+ni uses cuentas personales.
+
 ## Pruebas unitarias
 
 - Validación de SiteDocument.
