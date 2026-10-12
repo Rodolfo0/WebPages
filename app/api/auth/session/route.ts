@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { handleAuthSession } from '@/lib/auth/session';
+import { handleAuthSession } from '@/resources/auth/server/session';
 
 export const dynamic = 'force-dynamic';
 

@@ -41,7 +41,7 @@ const inheritedEnvironment = Object.fromEntries(
 ) as Record<string, string>;
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './resources',
   fullyParallel: false,
   workers: 1,
   reporter: 'list',

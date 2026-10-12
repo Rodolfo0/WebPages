@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSupabaseServerClient } from '../../lib/auth/supabase-server';
-import { handleAuthResendSignupConfirmation } from '../../lib/auth/actions';
+import { createSupabaseServerClient } from '../../server/supabase-server';
+import { handleAuthResendSignupConfirmation } from '../../server/actions';
 
-vi.mock('../../lib/auth/supabase-server', () => ({
+vi.mock('../../server/supabase-server', () => ({
   createSupabaseServerClient: vi.fn(),
 }));
 

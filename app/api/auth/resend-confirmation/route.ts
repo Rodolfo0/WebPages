@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { handleAuthResendSignupConfirmation } from '@/lib/auth/actions';
+import { handleAuthResendSignupConfirmation } from '@/resources/auth/server/actions';
 
 export const dynamic = 'force-dynamic';
 

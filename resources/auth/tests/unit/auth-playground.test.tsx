@@ -4,7 +4,7 @@ import React from 'react';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import AuthPlayground from '../../components/auth-playground';
+import AuthPlayground from '../../ui/auth-playground';
 
 function jsonResponse(body: unknown, status: number): Response {
   return {

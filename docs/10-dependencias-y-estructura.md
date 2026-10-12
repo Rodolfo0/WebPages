@@ -66,18 +66,18 @@ Estas dependencias deben instalarse como `devDependencies`:
 ## Comandos de instalación propuestos
 
 ```bash
-npm install zod zustand @dnd-kit/react @dnd-kit/helpers \
+pnpm add zod zustand @dnd-kit/react @dnd-kit/helpers \
   react-hook-form @hookform/resolvers \
   @supabase/supabase-js @supabase/ssr \
   fflate lucide-react \
   @mantine/core @mantine/hooks @mantine/notifications
 
-npm install -D vitest jsdom @vitest/coverage-v8 \
+pnpm add -D vitest jsdom @vitest/coverage-v8 \
   @testing-library/react @testing-library/jest-dom \
   @testing-library/user-event @playwright/test
 ```
 
-Los comandos son una propuesta. La autenticación debe instalarse después de confirmar que Supabase funciona correctamente con el runtime de Sites y Cloudflare Workers.
+Estos comandos sirven como referencia para dependencias propuestas que todavía no estén instaladas. Usa pnpm y conserva el lockfile canónico. La integración de Supabase Auth con Sites y Cloudflare Workers está comprobada en [el spike de autenticación](spikes/supabase-auth-sites-cloudflare.md).
 
 Mantine se usará para los componentes funcionales de la aplicación, como el dashboard, los formularios y el panel del editor. Tailwind seguirá disponible para layouts, estilos específicos de los bloques y la apariencia de los sitios publicados. Ambos pueden convivir, siempre que se definan reglas claras para evitar estilos duplicados.
 
@@ -85,43 +85,34 @@ Mantine se usará para los componentes funcionales de la aplicación, como el da
 
 ```text
 app/
-features/
-  projects/
-  editor/
-  publishing/
-blocks/
-lib/
-  site-document/
-  validation/
-server/
+  api/                       # entradas HTTP de Vinext; delegan en resources/
+  ...                        # páginas y layouts
+resources/
   auth/
-  projects/
-  uploads/
-  publishing/
-  export/
-db/
-exporter/
-  astro-template/
-tests/
+    server/
+    ui/
+    tests/
+      unit/
+      integration/
+      e2e/
+  <resource>/
+    ...                      # cada capacidad se agrega al implementarla
+shared/                      # utilidades genuinamente compartidas
+db/                          # esquema y acceso D1 compartidos, si aplica
+vitest.config.ts             # configuración central, casos junto al recurso
+playwright.config.ts         # configuración central, casos junto al recurso
 ```
 
 ### Responsabilidades principales
 
-- `app/`: rutas y composición de páginas.
-- `features/projects/`: dashboard, creación y configuración de proyectos.
-- `features/editor/`: canvas, panel de propiedades, selección, ordenamiento y autosave.
-- `features/publishing/`: estado de publicación, snapshots y exportación.
-- `blocks/`: registro, tipos, validación y renderizadores de cada bloque.
-- `lib/site-document/`: tipos, esquemas, migraciones y operaciones del documento canónico.
-- `lib/validation/`: esquemas compartidos de entrada y salida.
-- `server/auth/`: adaptador para el proveedor de autenticación.
-- `server/projects/`: consultas y operaciones privadas sobre proyectos.
-- `server/uploads/`: validación y almacenamiento de archivos en R2.
-- `server/publishing/`: creación de versiones publicadas y resolución de URLs públicas.
-- `server/export/`: generación de archivos Astro y ZIP.
-- `db/`: esquema, consultas y configuración de Drizzle para D1.
-- `exporter/astro-template/`: plantilla Astro usada para generar proyectos exportados.
-- `tests/`: pruebas unitarias, de integración y de interfaz.
+- `app/`: archivos de entrada que exige el router de Vinext; delegan la lógica en un recurso.
+- `resources/<resource>/`: interfaz, lógica de servidor y pruebas pertenecientes a una capacidad del producto.
+- `resources/<resource>/tests/`: pruebas unitarias, de integración y E2E de ese recurso.
+- `shared/`: contratos y utilidades compartidas cuando más de un recurso los necesita.
+- `db/`: esquema y acceso de Drizzle para D1 cuando la persistencia común lo requiera.
+- La estructura interna de cada recurso crece con la necesidad; no se añaden capas vacías por anticipado.
+
+El repositorio usa pnpm como gestor de paquetes canónico (`pnpm-lock.yaml` y `pnpm-workspace.yaml`). `package-lock.json` es heredado y no debe actualizarse en cambios rutinarios.
 
 ## Paquetes que no se instalarán inicialmente
 

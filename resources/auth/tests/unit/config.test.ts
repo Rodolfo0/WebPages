@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getSupabaseAuthConfig } from '../../lib/auth/config';
+import { getSupabaseAuthConfig } from '../../server/config';
 
 describe('Supabase Auth configuration', () => {
   it('requires the project URL and publishable key', () => {
