@@ -40,3 +40,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Local Dev Env Sync
+/vars.dev.json
+/secrets.dev.json
