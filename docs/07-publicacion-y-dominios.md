@@ -5,9 +5,12 @@
 GitHub Actions publica el Worker al hacer push a `main` o al ejecutar
 manualmente el workflow en esa rama. El orden es lint, build de producción,
 migraciones D1 remotas y `wrangler deploy`. El plugin de Cloudflare genera la
-configuración de Wrangler durante el build; el workflow aplica las migraciones
-con esa configuración y usa el mismo artefacto para publicar. D1 registra cada
-migración aplicada y los siguientes despliegues solo ejecutan las pendientes.
+configuración de Wrangler en `dist/server/wrangler.json` durante el build. El
+comando de migraciones usa `--config dist/server/wrangler.json`; no sigue el
+archivo de redirección `.wrangler/deploy/config.json` que consume `wrangler
+deploy`. Ambos comandos usan la configuración generada por el mismo build. D1
+registra cada migración aplicada y los siguientes despliegues solo ejecutan las
+pendientes.
 
 Antes del primer despliegue, crea una base D1 llamada `site-creator-d1` y un
 bucket R2 llamado `site-creator-r2` en la cuenta de Cloudflare. El binding D1
