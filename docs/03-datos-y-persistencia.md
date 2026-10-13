@@ -2,7 +2,7 @@
 
 ## Fuente de verdad
 
-El contenido de un sitio debe existir como un documento versionado y validado. No conviene almacenar una copia distinta para el editor React, la publicación React y la exportación Astro.
+El contenido de un sitio debe existir como un documento versionado y validado. No conviene almacenar una copia distinta para el editor React, la publicación React y la exportación Astro. La implementación canónica y sus tipos están en `resources/site-document`; sus consumidores importan desde `resources/site-document/index.ts`.
 
     type SiteDocument = {
       version: 1
@@ -15,7 +15,27 @@ El contenido de un sitio debe existir como un documento versionado y validado. N
       pages: PageDocument[]
     }
 
+    type PageDocument = {
+      id: string
+      path: string
+      blocks: BlockInstance[]
+    }
+
+    type BlockInstance = {
+      id: string
+      type: string
+      props: Record<string, unknown>
+    }
+
+`ThemeTokens` v1 incluye `colors.background`, `colors.text`, `colors.accent`, `typography.heading`, `typography.body` y `spacing`. Los colores son hexadecimales; las fuentes (`sans`, `serif`, `mono`) y el espaciado (`compact`, `comfortable`, `spacious`) son opciones cerradas. El schema aplica los valores iniciales definidos por el contrato cuando se omite el tema o alguno de sus tokens.
+
+`createSiteDocumentSchema(blockRegistry)` construye el validador con los schemas y `defaultProps` del registro de bloques. Los props omitidos toman sus valores iniciales; cada schema de props debe rechazar claves desconocidas. El documento también rechaza propiedades extra en sitio, tema, página y bloque, tipos de bloque sin registrar, versiones distintas de 1, rutas o slugs mal formados y páginas o bloques con IDs repetidos dentro de su ámbito.
+
 Cada cambio debe pasar por una validación de esquema. Una migración futura podrá convertir documentos antiguos a una versión nueva antes de editarlos o publicarlos.
+
+### Migraciones del documento
+
+`version` identifica la forma persistida. Para introducir v2, conserva la validación de v1, agrega una función pura `migrateV1ToV2` y actualiza el discriminador al terminar la conversión. Las conversiones se ejecutan en orden antes de validar con el schema de la versión actual. Valida el resultado final con el registro vigente, guarda un borrador migrado como nueva revisión y conserva los snapshots publicados inmutables. Si no existe una ruta de migración desde la versión leída, rechaza el documento con un error de versión no compatible; no lo reescribas parcialmente.
 
 ## D1
 

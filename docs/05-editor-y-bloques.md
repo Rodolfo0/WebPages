@@ -29,6 +29,8 @@ Cada bloque debe tener una composición terminada. El usuario cambia el contenid
 
 La definición centraliza el nombre del bloque, sus valores iniciales, validación y renderizadores. El editor usa reactComponent; el exportador Astro usa astroComponentPath.
 
+El registro entrega `propsSchema` y `defaultProps` a `createSiteDocumentSchema` desde `resources/site-document`. El schema valida los valores iniciales al crear el validador, los aplica cuando faltan props en una instancia y rechaza props adicionales. Los consumidores deben validar el documento completo con el registro, para que también se rechacen tipos de bloque desconocidos.
+
 Cada bloque es dueño de sus estilos. Su renderizador React debe conservar la misma apariencia en la vista pública y en el canvas, sin importar estilos del dashboard o depender de Mantine. Consulta [UI y estilos](12-ui-y-estilos.md) para la convención de aislamiento y el uso de tokens del tema.
 
 ## Propiedades permitidas

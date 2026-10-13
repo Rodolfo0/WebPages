@@ -19,6 +19,8 @@ El registro de bloques debe conocer ambos renderizadores:
 
 Cada bloque valida sus props antes de renderizar. El exportador no debe concatenar texto del usuario dentro de archivos JavaScript o TypeScript. Debe escribir datos en JSON y pasar esos datos a componentes fijos.
 
+El exportador consume el contrato público `resources/site-document` igual que el editor y la publicación. Antes de renderizar, migra una versión anterior si hay una cadena de migraciones disponible y valida el documento resultante con el registro de bloques. La exportación no mantiene un schema ni un formato alternativo.
+
 ## Estructura del proyecto exportado
 
     astro-site/

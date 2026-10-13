@@ -10,6 +10,8 @@ React cubrirá tres superficies relacionadas:
 
 Las tres superficies deben consumir el mismo SiteDocument. El editor no debe producir un formato distinto al que usa la publicación.
 
+El contrato canónico vive en `resources/site-document` y expone su API pública desde `index.ts`. El editor, la publicación y cualquier exportador deben importar ese punto de entrada; no deben mantener tipos ni validadores paralelos.
+
 El dashboard y el editor comparten la convención de controles descrita en [UI y estilos](12-ui-y-estilos.md). El renderizador público tiene su propia entrada de estilos; no monta el shell ni el tema de Mantine del área privada.
 
 ## Organización lógica
