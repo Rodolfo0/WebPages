@@ -72,7 +72,10 @@ export async function handleAuthSignUp(
   if (!server) return jsonResponse({ error: 'supabase_not_configured' }, 503);
 
   try {
-    const emailRedirectTo = new URL('/auth/callback', request.url).toString();
+    const emailRedirectTo = new URL(
+      '/auth/confirm/start',
+      request.url,
+    ).toString();
     const { data, error } = await server.client.auth.signUp({
       ...credentials,
       options: { emailRedirectTo },
@@ -115,7 +118,10 @@ export async function handleAuthResendSignupConfirmation(
   if (!server) return jsonResponse({ error: 'supabase_not_configured' }, 503);
 
   try {
-    const emailRedirectTo = new URL('/auth/callback', request.url).toString();
+    const emailRedirectTo = new URL(
+      '/auth/confirm/start',
+      request.url,
+    ).toString();
     const { error } = await server.client.auth.resend({
       type: 'signup',
       email,

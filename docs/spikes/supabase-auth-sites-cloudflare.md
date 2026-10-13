@@ -36,11 +36,17 @@ Para la prueba de runtime, el control plane de Cloudflare debe inyectar `SUPABAS
 
 Con las dependencias instaladas y las variables configuradas, ejecutar `npm run dev` y abrir `http://localhost:3000` (puerto predeterminado de Vinext). La pantalla ofrece registro, login y logout; al entrar, consulta la sesión con `GET /api/auth/session`.
 
-La ruta de confirmación de la aplicación ya existe en `GET /auth/callback`. El enlace del correo apunta primero a Supabase (`/auth/v1/verify`), que valida el token de un solo uso y redirige a `redirect_to`; en el flujo PKCE, Supabase agrega un `code`. La ruta intercambia ese código por una sesión con `exchangeCodeForSession()`, guarda las cookies de Supabase y vuelve a `/` con el estado de confirmación. La aplicación genera `redirect_to` usando el origen de la petición que hizo el registro.
+El callback PKCE original permanece en `GET /auth/callback` para enlaces que ya fueron enviados. Si la plantilla aún usa `{{ .ConfirmationURL }}`, `/auth/confirm/start` reenvía el `code` al callback original; ese flujo conserva la limitación de abrirse en el navegador donde se inició el registro. Los correos nuevos deben usar `TokenHash` y una confirmación explícita para crear la sesión en el navegador que abre el correo, aunque sea otro dispositivo.
 
-Si Supabase devuelve `error_code=otp_expired`, el callback muestra el estado de enlace vencido o usado y permite solicitar otro. El formulario envía el correo a `POST /api/auth/resend-confirmation`, que usa `auth.resend({ type: 'signup' })`; se debe abrir el correo más reciente en el mismo navegador donde se solicitó para conservar el verificador PKCE.
+En **Authentication → Email Templates → Confirm signup**, sustituir el enlace basado en `{{ .ConfirmationURL }}` por:
 
-En **Authentication → URL Configuration → Redirect URLs**, permitir el callback del puerto con el que se inició el registro, por ejemplo `http://localhost:3000/auth/callback` (o `http://localhost:3000/**`). La integración/E2E de Playwright usa el puerto `5180`, así que también se puede permitir `http://localhost:5180/**` para probar ese origen. Un correo ya enviado conserva el puerto incluido al registrarse: el enlace compartido apunta a `5173`, por lo que requiere un servidor accesible en ese puerto; para usar el servidor actual en `3000`, iniciar un registro nuevo desde `3000` y usar el nuevo correo. El proyecto Supabase debe tener Email habilitado.
+```html
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}">Confirmar correo</a>
+```
+
+`signUp()` y `resend()` envían `emailRedirectTo` hacia `/auth/confirm/start`; ese endpoint prepara una confirmación con un paso explícito y no consume el token al cargar la página. El formulario envía el `token_hash` a `POST /auth/confirm/verify`, donde `auth.verifyOtp({ token_hash, type: 'email' })` valida el email y guarda las cookies de sesión en el navegador actual. La protección CSRF usa un estado breve asociado a una cookie del mismo navegador. No se debe verificar el token directamente en un `GET`, porque algunos lectores de correo inspeccionan enlaces automáticamente.
+
+En **Authentication → URL Configuration → Redirect URLs**, permitir `/auth/confirm/start` para cada origen usado al registrarse, por ejemplo `http://localhost:3000/auth/confirm/start` y `http://localhost:5180/auth/confirm/start`. La aplicación incluye el origen de la petición al llamar a Supabase. Un correo ya enviado conserva la URL y el flujo PKCE anteriores; puede requerir el navegador original o se puede solicitar un correo nuevo después de actualizar la plantilla. El proyecto Supabase debe tener Email habilitado.
 
 ## Compatibilidad y límites
 
@@ -72,7 +78,7 @@ El envío requiere SMTP. El servicio de correo de prueba de Supabase tiene un l�
 | Criterio | Estado | Evidencia |
 | --- | --- | --- |
 | Registro, inicio y cierre de sesión; validación de sesión en servidor | Parcial | Ya hay rutas de proveedor y una pantalla de prueba; falta ejecutarlas contra un proyecto Supabase y el Worker real. |
-| Confirmación y recuperación de email | Parcial | El callback PKCE de confirmación está implementado; falta probar el correo real. La recuperación de contraseña sigue pendiente. |
+| Confirmación y recuperación de email | Parcial | La ruta con `TokenHash` y el paso explícito están implementados para confirmación entre dispositivos; falta configurar la plantilla, permitir las URLs y probar el correo real. La recuperación de contraseña sigue pendiente. |
 | Límites de Sites y Cloudflare documentados | Parcial | Se documentan caché, cookies, redirects y la incertidumbre específica de Vinext/Sites; el comportamiento publicado todavía debe comprobarse. |
 | Alternativa gestionada si Supabase no es viable | No aplica todavía | No hay evidencia suficiente para declarar Supabase inviable. `@supabase/server` solo cubre un modelo distinto de sesión y no es un reemplazo directo. |
 | Sin contraseñas, hashes ni sesiones propias | Cumplido en el diseño actual | El formulario envía credenciales a Supabase y las sesiones usan cookies administradas por `@supabase/ssr`; no se persisten contraseñas, hashes ni sesiones en almacenamiento propio. |

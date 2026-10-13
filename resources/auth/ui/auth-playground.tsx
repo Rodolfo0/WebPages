@@ -56,9 +56,12 @@ export default function AuthPlayground() {
     if (authResult === 'confirmed') {
       // Read the callback result from the browser URL after hydration.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setMessage('Correo confirmado. Ya puedes iniciar sesión.');
+      setMessage('Correo confirmado. La sesión está iniciada en este navegador.');
     } else if (authResult === 'callback_error') {
-      setError('No se pudo completar la confirmación. Solicita un enlace nuevo.');
+      setError(
+        'No se pudo completar la confirmación. Escribe el correo de la cuenta y solicita un enlace nuevo. Usa el enlace más reciente para intentarlo otra vez.',
+      );
+      setCanResendConfirmation(true);
     } else if (authResult === 'link_expired') {
       setError('El enlace venció o ya se usó. Escribe tu correo y solicita uno nuevo.');
       setCanResendConfirmation(true);
