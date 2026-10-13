@@ -56,7 +56,7 @@ Tablas iniciales sugeridas:
 - created_at
 - updated_at
 
-auth_subject debe ser único. La aplicación no guarda contraseñas.
+`auth_subject` es el ID que entrega Supabase Auth y es único. La aplicación no guarda contraseñas, hashes ni tokens. Los IDs internos son UUID generados en el servidor.
 
 ### projects
 
@@ -72,6 +72,8 @@ auth_subject debe ser único. La aplicación no guarda contraseñas.
 
 El slug debe ser único dentro de la modalidad de URL administrada.
 
+`draft_document_json` conserva el `SiteDocument` completo como JSON validado por la aplicación y por la restricción `json_valid` de D1. El slug se mantiene también en la columna indexada para resolver `/s/:slug`; ambas copias deben actualizarse juntas.
+
 ### site_versions
 
 - id
@@ -81,7 +83,7 @@ El slug debe ser único dentro de la modalidad de URL administrada.
 - created_at
 - published_at
 
-Las versiones publicadas no se modifican. Si el usuario vuelve a publicar, se crea otra versión.
+Cada fila representa un snapshot publicado. Un trigger de D1 rechaza cualquier `UPDATE`; volver a publicar crea otra fila. `published_version_id` solo puede apuntar a una versión del mismo proyecto. Al eliminar un proyecto, sus versiones se eliminan en cascada.
 
 ### assets
 
@@ -108,7 +110,7 @@ Las versiones publicadas no se modifican. Si el usuario vuelve a publicar, se cr
 
 R2 almacenará los bytes de imágenes y exportaciones. D1 solo conservará metadata, relaciones de propiedad y claves de objetos.
 
-Las claves de objetos no deben depender únicamente del nombre original. Deben incluir el usuario, el proyecto y un identificador generado por la aplicación.
+Las claves de objetos no deben depender únicamente del nombre original. Deben incluir el usuario, el proyecto y un identificador generado por la aplicación. `assets.r2_key` es única; `filename`, `content_type`, `byte_size`, `alt_text` y fechas son metadata. La fila del asset se relaciona con el proyecto y obtiene su propietario mediante esa relación.
 
 ## Índices
 
@@ -119,6 +121,12 @@ Crear índices para las consultas reales del MVP:
 - Versiones por project_id y fecha.
 - Assets por project_id.
 - Mensajes por project_id, estado y fecha.
+
+Los timestamps se guardan como milisegundos Unix en columnas enteras. Los estados permitidos son `draft`, `published` y `archived` para proyectos; `unread`, `read` y `archived` para mensajes.
+
+### Migraciones D1
+
+El esquema Drizzle vive en `db/schema.ts`. `pnpm db:generate` crea el SQL versionado y su snapshot en `drizzle/`; revisa la migración antes de aplicarla. Los triggers de inmutabilidad y pertenencia de la versión publicada se expresan como SQL en la migración porque Drizzle no los representa en el schema TypeScript. Conserva esos triggers al crear cambios posteriores.
 
 ## Futuro de dominios
 
