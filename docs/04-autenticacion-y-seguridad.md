@@ -33,6 +33,8 @@ El resto de la aplicación recibe un usuario autenticado, no un objeto específi
 - Renovación y expiración de sesión.
 - Mensaje claro para una sesión inválida o expirada.
 
+La confirmación de email debe funcionar cuando se abre el correo en otro navegador o dispositivo. Para lograrlo con `@supabase/ssr`, la plantilla de confirmación envía `TokenHash` a una página de confirmación de la aplicación; una acción explícita verifica el token mediante `verifyOtp()` y crea la sesión en el navegador que la realizó. No se debe depender del verificador PKCE que quedó en el navegador del registro.
+
 ## Autorización
 
 La autenticación identifica al usuario. La autorización decide qué puede hacer con cada recurso.

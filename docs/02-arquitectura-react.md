@@ -10,20 +10,37 @@ React cubrirá tres superficies relacionadas:
 
 Las tres superficies deben consumir el mismo SiteDocument. El editor no debe producir un formato distinto al que usa la publicación.
 
+El dashboard y el editor comparten la convención de controles descrita en [UI y estilos](12-ui-y-estilos.md). El renderizador público tiene su propia entrada de estilos; no monta el shell ni el tema de Mantine del área privada.
+
 ## Organización lógica
 
-La estructura puede organizarse por dominio, no por tipo genérico de archivo:
+La estructura sigue una arquitectura por recursos (Screaming Architecture): el primer nivel después de las rutas nombra las capacidades del producto, y cada recurso contiene su implementación y sus pruebas.
 
-    src/
-      app/                 Rutas y composición de páginas
-      features/projects/   Lista, creación y configuración de proyectos
-      features/editor/     Canvas, panel, selección y autosave
-      features/publishing/Estado de publicación y exportación
-      blocks/              Registro y renderizadores de bloques
-      server/              Autorización, consultas y operaciones de escritura
-      lib/site-document/   Tipos, validación y migraciones del documento
+`app/` conserva las entradas que requiere Vinext: páginas, layouts y route handlers. Esas entradas componen la interfaz o delegan las solicitudes; las reglas de negocio pertenecen al recurso.
 
-Los nombres pueden cambiar según el starter elegido. La separación importante es que la validación, la autorización y el documento canónico no vivan únicamente dentro de componentes de interfaz.
+```text
+app/
+  api/auth/.../route.ts       # adapters del router hacia el recurso auth
+  auth/callback/route.ts
+  page.tsx
+resources/
+  auth/
+    server/                   # Supabase, sesiones y handlers
+    ui/                       # Interfaz propia de autenticación
+    tests/
+      unit/
+      integration/
+      e2e/
+  <resource>/
+    ...                       # se crea al implementar esa capacidad
+shared/                       # código realmente compartido entre recursos
+```
+
+Cada carpeta de `resources/<resource>/` puede organizarse por responsabilidad —por ejemplo, `server/`, `ui/`, `domain/` o `application/`— según lo necesite el recurso. No se crean carpetas vacías ni capas sin uso.
+
+Las pruebas viven junto al recurso que posee el comportamiento. Un recorrido E2E entre varios recursos se coloca en el recurso dueño del flujo principal. `shared/` contiene solo código agnóstico usado por más de un recurso; un recurso no debe importar detalles privados de otro.
+
+Actualmente `auth` es el primer recurso migrado. Se añadirán recursos como proyectos, editor o publicación cuando se implemente ese comportamiento.
 
 ## Rutas principales
 
