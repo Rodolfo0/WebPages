@@ -19,11 +19,13 @@ export default defineConfig(async ({ mode }) => {
 
   if (d1 && mode === "production" && !databaseId) {
     throw new Error(
-      "D1_DATABASE_ID is required for production builds. Set it as a Cloudflare build variable or in .env.production.local.",
+      "D1_DATABASE_ID is required for production builds. Set it in the GitHub Actions production environment or in .env.production.local.",
     );
   }
 
   const localBindingConfig = {
+    name: "site-creator",
+    compatibility_date: "2026-10-13",
     main: "vinext/server/app-router-entry",
     compatibility_flags: ["nodejs_compat"],
     d1_databases: d1
@@ -32,6 +34,7 @@ export default defineConfig(async ({ mode }) => {
             binding: d1,
             database_name: "site-creator-d1",
             database_id: databaseId || LOCAL_D1_DATABASE_ID,
+            migrations_dir: "drizzle",
           },
         ]
       : [],

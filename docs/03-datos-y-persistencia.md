@@ -40,11 +40,11 @@ Cada cambio debe pasar por una validación de esquema. Una migración futura pod
 ## D1
 
 El ID de la base enlazada al Worker se configura con `D1_DATABASE_ID`. Es una
-variable de configuración de build: en Cloudflare se define en las variables
-de build del proyecto Workers; para un build local de producción se puede usar
-`.env.production.local`, que Vite carga y Git ignora. Los builds de producción
-fallan si la variable no está definida. En desarrollo local se usa un ID de
-prueba para que Miniflare pueda crear su binding local.
+variable de configuración de build: en producción se define como variable del
+Environment `production` de GitHub Actions; para un build local de producción se
+puede usar `.env.production.local`, que Vite carga y Git ignora. Los builds de
+producción fallan si la variable no está definida. En desarrollo local se usa
+un ID de prueba para que Miniflare pueda crear su binding local.
 
 Tablas iniciales sugeridas:
 

@@ -14,7 +14,9 @@
     "test:integration": "playwright test --project=integration",
     "test:e2e": "playwright test --project=e2e",
     "test:auth": "vitest run resources/auth/tests/unit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:remote": "wrangler d1 migrations apply site-creator-d1 --remote",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@dnd-kit/helpers": "^0.5.0",
