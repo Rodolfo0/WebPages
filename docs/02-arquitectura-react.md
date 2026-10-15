@@ -27,7 +27,8 @@ app/
   page.tsx
 resources/
   auth/
-    server/                   # Supabase, sesiones y handlers
+    domain/                   # AuthUser, contrato del adaptador y errores internos
+    server/                   # API pública, sesiones, handlers y proveedor
     ui/                       # Interfaz propia de autenticación
     tests/
       unit/
@@ -43,6 +44,8 @@ Cada carpeta de `resources/<resource>/` puede organizarse por responsabilidad �
 Las pruebas viven junto al recurso que posee el comportamiento. Un recorrido E2E entre varios recursos se coloca en el recurso dueño del flujo principal. `shared/` contiene solo código agnóstico usado por más de un recurso; un recurso no debe importar detalles privados de otro.
 
 Actualmente `auth` es el primer recurso migrado. Se añadirán recursos como proyectos, editor o publicación cuando se implemente ese comportamiento.
+
+La autenticación expone `resources/auth/server` como API de servidor y `resources/auth` como contrato de identidad. Las superficies privadas reciben `AuthUser` mediante `withAuthUser()`; las dependencias de Supabase permanecen en la implementación del proveedor. El formulario privado de cambio de contraseña consume ese mismo tipo.
 
 ## Rutas principales
 

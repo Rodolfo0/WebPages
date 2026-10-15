@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { AuthUser } from '../domain/auth';
+import PasswordResetForm from './password-reset-form';
 
-type AuthUser = { id: string; email: string | null };
 type ViewState = 'loading' | 'signed_out' | 'signed_in' | 'unavailable';
-type Mode = 'login' | 'signup';
+type Mode = 'login' | 'signup' | 'recover';
 
 type ApiResult = {
   authenticated?: boolean;
@@ -25,13 +26,14 @@ export default function AuthPlayground() {
   const [error, setError] = useState('');
   const [canResendConfirmation, setCanResendConfirmation] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [wantsPasswordReset, setWantsPasswordReset] = useState(false);
 
-  async function refreshSession() {
+  async function refreshSession(requireRecoverySession = false) {
     try {
       const response = await fetch('/api/auth/session', { cache: 'no-store' });
       const result = (await response.json()) as ApiResult;
 
-      if (response.status === 503) {
+      if (response.status >= 500) {
         setUser(null);
         setView('unavailable');
         return;
@@ -45,6 +47,13 @@ export default function AuthPlayground() {
 
       setUser(null);
       setView('signed_out');
+      if (result.error === 'session_expired' || result.error === 'session_invalid') {
+        setError(result.message ?? 'Tu sesión venció o no es válida. Inicia sesión de nuevo.');
+      } else if (requireRecoverySession) {
+        setMode('recover');
+        setWantsPasswordReset(false);
+        setError('Tu sesión de recuperación no está disponible. Solicita un enlace nuevo.');
+      }
     } catch {
       setUser(null);
       setView('unavailable');
@@ -65,9 +74,18 @@ export default function AuthPlayground() {
     } else if (authResult === 'link_expired') {
       setError('El enlace venció o ya se usó. Escribe tu correo y solicita uno nuevo.');
       setCanResendConfirmation(true);
+    } else if (authResult === 'recovery') {
+      setWantsPasswordReset(true);
+    } else if (authResult === 'recovery_error' || authResult === 'recovery_link_expired') {
+      setMode('recover');
+      setError('El enlace de recuperación venció, ya se usó o no es válido. Solicita uno nuevo.');
     }
+    if (authResult) window.history.replaceState({}, '', window.location.pathname);
 
-    void refreshSession();
+    void refreshSession(authResult === 'recovery');
+    const revalidate = () => { void refreshSession(); };
+    window.addEventListener('focus', revalidate);
+    return () => window.removeEventListener('focus', revalidate);
   }, []);
 
   async function submitCredentials(event: React.FormEvent<HTMLFormElement>) {
@@ -78,26 +96,31 @@ export default function AuthPlayground() {
 
     try {
       const response = await fetch(
-        mode === 'signup' ? '/api/auth/signup' : '/api/auth/login',
+        mode === 'recover' ? '/api/auth/password/recover' : mode === 'signup' ? '/api/auth/signup' : '/api/auth/login',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify(mode === 'recover' ? { email } : { email, password }),
         },
       );
       const result = (await response.json()) as ApiResult;
 
       if (!response.ok) {
-        if (result.error === 'supabase_not_configured') {
+        if (result.error === 'auth_not_configured') {
           setView('unavailable');
-          setError('Falta configurar Supabase en el entorno local.');
+          setError('El servicio de autenticación no está disponible.');
         } else {
           setError(result.message ?? 'No se pudo completar la solicitud.');
+          if (result.error === 'email_confirmation_required') setCanResendConfirmation(true);
         }
         return;
       }
 
       setPassword('');
+      if (mode === 'recover') {
+        setMessage('Si existe una cuenta con ese correo, recibirás un enlace para recuperar el acceso.');
+        return;
+      }
       if (mode === 'signup' && result.confirmationRequired) {
         setMessage(
           `Cuenta creada para ${email}. Revisa tu correo y confirma la dirección para iniciar sesión.`,
@@ -130,6 +153,7 @@ export default function AuthPlayground() {
 
       setUser(null);
       setView('signed_out');
+      setWantsPasswordReset(false);
       setMessage('Sesión cerrada.');
     } catch {
       setError('No se pudo conectar con el servidor de autenticación.');
@@ -157,7 +181,7 @@ export default function AuthPlayground() {
       }
 
       setMessage(
-        `Si ${email} tiene una cuenta pendiente, Supabase enviará un nuevo enlace. Revisa tu correo.`,
+        `Si ${email} tiene una cuenta pendiente, se enviará un nuevo enlace. Revisa tu correo.`,
       );
     } catch {
       setError('No se pudo conectar con el servidor de autenticación.');
@@ -171,22 +195,33 @@ export default function AuthPlayground() {
       <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">
-            Spike · Supabase Auth
+            Acceso a tu cuenta
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Prueba de registro e inicio de sesión
+            Inicia sesión o crea tu cuenta
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-            Este formulario envía las credenciales a rutas del servidor. Supabase
-            administra las contraseñas y las cookies de sesión.
+            Accede a tu cuenta o recupera el acceso desde tu correo.
           </p>
 
           {view === 'signed_in' && user ? (
+            wantsPasswordReset ? (
+              <PasswordResetForm user={user} onCancel={() => setWantsPasswordReset(false)} onComplete={() => {
+                setWantsPasswordReset(false);
+                setMessage('Contraseña actualizada.');
+              }} onSessionInvalid={() => {
+                setWantsPasswordReset(false);
+                setUser(null);
+                setView('signed_out');
+                setMode('recover');
+                setError('Tu sesión venció. Solicita un enlace de recuperación nuevo.');
+              }} />
+            ) : (
             <div className="mt-9 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
               <div className="flex flex-wrap items-start justify-between gap-5">
                 <div>
                   <p className="text-sm font-semibold text-emerald-900">
-                    Sesión válida en el servidor
+                    Sesión iniciada
                   </p>
                   <p className="mt-2 text-sm text-emerald-800">{user.email}</p>
                   <p className="mt-1 break-all font-mono text-xs text-emerald-700">
@@ -202,11 +237,12 @@ export default function AuthPlayground() {
                   {busy ? 'Procesando…' : 'Cerrar sesión'}
                 </button>
               </div>
-              <p className="mt-5 text-xs text-emerald-800">
-                Validación realizada por <code>auth.getUser()</code> en{' '}
-                <code>/api/auth/session</code>.
-              </p>
+              <button type="button" onClick={() => setWantsPasswordReset(true)}
+                className="mt-5 text-sm font-semibold text-indigo-700">
+                Cambiar contraseña
+              </button>
             </div>
+            )
           ) : (
             <div className="mt-9 max-w-lg">
               <div className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
@@ -251,7 +287,7 @@ export default function AuthPlayground() {
                     placeholder="tu@correo.com"
                   />
                 </label>
-                <label className="block">
+                {mode !== 'recover' && <label className="block">
                   <span className="mb-2 block text-sm font-medium text-slate-700">
                     Contraseña
                   </span>
@@ -262,9 +298,9 @@ export default function AuthPlayground() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
-                    placeholder="Contraseña de Supabase"
+                    placeholder="Tu contraseña"
                   />
-                </label>
+                </label>}
 
                 {error && (
                   <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
@@ -278,8 +314,7 @@ export default function AuthPlayground() {
                 )}
                 {view === 'unavailable' && !error && (
                   <p role="status" className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    Configura <code>SUPABASE_URL</code> y{' '}
-                    <code>SUPABASE_PUBLISHABLE_KEY</code> en <code>.env.local</code>.
+                    El servicio de autenticación no está disponible. Inténtalo de nuevo más tarde.
                   </p>
                 )}
 
@@ -290,11 +325,20 @@ export default function AuthPlayground() {
                 >
                   {busy
                     ? 'Procesando…'
+                    : mode === 'recover'
+                      ? 'Enviar enlace de recuperación'
                     : mode === 'signup'
                       ? 'Crear cuenta'
                       : 'Iniciar sesión'}
                 </button>
               </form>
+              {mode === 'login' && (
+                <button type="button" onClick={() => {
+                  setMode('recover'); setPassword(''); setError(''); setMessage('');
+                }} className="mt-4 text-sm font-semibold text-indigo-700">
+                  ¿Olvidaste tu contraseña?
+                </button>
+              )}
 
               {canResendConfirmation && mode === 'login' && (
                 <button
@@ -341,12 +385,11 @@ export default function AuthPlayground() {
             </span>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            La pantalla consulta <code>GET /api/auth/session</code>. Así se
-            comprueba el usuario desde el runtime del servidor.
+            La sesión se comprueba antes de acceder a la información de tu cuenta.
           </p>
           <ol className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm text-slate-600">
             <li><span className="font-semibold text-slate-900">1.</span> Crea una cuenta de prueba.</li>
-            <li><span className="font-semibold text-slate-900">2.</span> Confirma el correo si Supabase lo solicita.</li>
+            <li><span className="font-semibold text-slate-900">2.</span> Confirma tu correo.</li>
             <li><span className="font-semibold text-slate-900">3.</span> Inicia sesión y revisa el estado.</li>
             <li><span className="font-semibold text-slate-900">4.</span> Cierra sesión y confirma que desaparece.</li>
           </ol>

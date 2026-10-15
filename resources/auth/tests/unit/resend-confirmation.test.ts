@@ -37,7 +37,7 @@ describe('POST /api/auth/resend-confirmation handler', () => {
     expect(resend).toHaveBeenCalledWith({
       type: 'signup',
       email: 'pending@example.test',
-      options: { emailRedirectTo: 'http://localhost:5180/auth/callback' },
+      options: { emailRedirectTo: 'http://localhost:5180/auth/confirm/start' },
     });
     expect(applyAuthResponse).toHaveBeenCalledOnce();
   });

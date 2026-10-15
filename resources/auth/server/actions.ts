@@ -1,211 +1,103 @@
-import type { SupabaseAuthBindings } from './config';
-import { createSupabaseServerClient } from './supabase-server';
+import type { AuthAdapter, AuthCredentials } from '../domain/auth';
+import { createAuthAdapter } from './auth';
+import type { AuthBindings } from './config';
+import { authErrorResponse, authJson, isSameOrigin } from './http';
 
-type Credentials = {
-  email: string;
-  password: string;
-};
-
-function jsonResponse(body: unknown, status: number) {
-  return Response.json(body, {
-    status,
-    headers: {
-      'Cache-Control': 'private, no-store',
-      Pragma: 'no-cache',
-      Vary: 'Cookie',
-    },
-  });
-}
-
-async function readCredentials(request: Request): Promise<Credentials | null> {
+async function readBody(request: Request): Promise<Record<string, unknown> | null> {
   try {
     const body: unknown = await request.json();
-    if (!body || typeof body !== 'object') return null;
-
-    const { email, password } = body as Record<string, unknown>;
-    if (
-      typeof email !== 'string' ||
-      !email.trim() ||
-      typeof password !== 'string' ||
-      !password
-    ) {
-      return null;
-    }
-
-    return { email: email.trim(), password };
+    return body && typeof body === 'object' && !Array.isArray(body)
+      ? body as Record<string, unknown> : null;
   } catch {
     return null;
   }
+}
+
+async function readCredentials(request: Request): Promise<AuthCredentials | null> {
+  const body = await readBody(request);
+  if (typeof body?.email !== 'string' || !body.email.trim() ||
+    typeof body.password !== 'string' || !body.password) return null;
+  return { email: body.email.trim(), password: body.password };
 }
 
 async function readEmail(request: Request): Promise<string | null> {
-  try {
-    const body: unknown = await request.json();
-    if (!body || typeof body !== 'object') return null;
-
-    const { email } = body as Record<string, unknown>;
-    if (typeof email !== 'string' || !email.trim()) return null;
-    return email.trim();
-  } catch {
-    return null;
-  }
+  const body = await readBody(request);
+  return typeof body?.email === 'string' && body.email.trim() ? body.email.trim() : null;
 }
 
-function createClient(request: Request, bindings: SupabaseAuthBindings) {
-  try {
-    return createSupabaseServerClient(request, bindings);
-  } catch {
-    return null;
-  }
-}
-
-export async function handleAuthSignUp(
+async function perform(
   request: Request,
-  bindings: SupabaseAuthBindings,
+  bindings: AuthBindings,
+  action: (auth: AuthAdapter) => Promise<Response>,
 ) {
+  let auth: AuthAdapter | undefined;
+  try {
+    auth = createAuthAdapter(request, bindings);
+    return auth.applyResponse(await action(auth));
+  } catch (error) {
+    const response = authErrorResponse(error);
+    return auth ? auth.applyResponse(response) : response;
+  }
+}
+
+function invalidOrigin() {
+  return authJson({ error: 'invalid_origin', message: 'La solicitud debe venir de esta aplicación.' }, 403);
+}
+
+export async function handleAuthSignUp(request: Request, bindings: AuthBindings) {
+  if (!isSameOrigin(request)) return invalidOrigin();
   const credentials = await readCredentials(request);
-  if (!credentials) {
-    return jsonResponse({ error: 'email_and_password_required' }, 400);
-  }
-
-  const server = createClient(request, bindings);
-  if (!server) return jsonResponse({ error: 'supabase_not_configured' }, 503);
-
-  try {
-    const emailRedirectTo = new URL(
-      '/auth/confirm/start',
-      request.url,
-    ).toString();
-    const { data, error } = await server.client.auth.signUp({
-      ...credentials,
-      options: { emailRedirectTo },
-    });
-
-    if (error) {
-      return server.applyAuthResponse(
-        jsonResponse({ error: 'signup_failed', message: error.message }, 400),
-      );
-    }
-
-    return server.applyAuthResponse(
-      jsonResponse(
-        {
-          confirmationRequired: !data.session,
-          user: data.user
-            ? { id: data.user.id, email: data.user.email ?? null }
-            : null,
-        },
-        200,
-      ),
-    );
-  } catch {
-    return server.applyAuthResponse(
-      jsonResponse({ error: 'auth_provider_unavailable' }, 502),
-    );
-  }
+  if (!credentials) return authJson({ error: 'email_and_password_required' }, 400);
+  return perform(request, bindings, async (auth) => authJson(await auth.signUp(
+    credentials, new URL('/auth/confirm/start', request.url).toString(),
+  )));
 }
 
-export async function handleAuthResendSignupConfirmation(
-  request: Request,
-  bindings: SupabaseAuthBindings,
-) {
+export async function handleAuthResendSignupConfirmation(request: Request, bindings: AuthBindings) {
+  if (!isSameOrigin(request)) return invalidOrigin();
   const email = await readEmail(request);
-  if (!email) {
-    return jsonResponse({ error: 'email_required' }, 400);
-  }
-
-  const server = createClient(request, bindings);
-  if (!server) return jsonResponse({ error: 'supabase_not_configured' }, 503);
-
-  try {
-    const emailRedirectTo = new URL(
-      '/auth/confirm/start',
-      request.url,
-    ).toString();
-    const { error } = await server.client.auth.resend({
-      type: 'signup',
-      email,
-      options: { emailRedirectTo },
-    });
-
-    if (error) {
-      return server.applyAuthResponse(
-        jsonResponse(
-          {
-            error: 'confirmation_resend_failed',
-            message: 'No se pudo solicitar el correo. Espera un momento e inténtalo de nuevo.',
-          },
-          400,
-        ),
-      );
-    }
-
-    return server.applyAuthResponse(jsonResponse({ sent: true }, 200));
-  } catch {
-    return server.applyAuthResponse(
-      jsonResponse({ error: 'auth_provider_unavailable' }, 502),
-    );
-  }
+  if (!email) return authJson({ error: 'email_required' }, 400);
+  return perform(request, bindings, async (auth) => {
+    await auth.resendConfirmation(email, new URL('/auth/confirm/start', request.url).toString());
+    return authJson({ sent: true });
+  });
 }
 
-export async function handleAuthSignIn(
-  request: Request,
-  bindings: SupabaseAuthBindings,
-) {
+export async function handleAuthSignIn(request: Request, bindings: AuthBindings) {
+  if (!isSameOrigin(request)) return invalidOrigin();
   const credentials = await readCredentials(request);
-  if (!credentials) {
-    return jsonResponse({ error: 'email_and_password_required' }, 400);
-  }
-
-  const server = createClient(request, bindings);
-  if (!server) return jsonResponse({ error: 'supabase_not_configured' }, 503);
-
-  try {
-    const { data, error } = await server.client.auth.signInWithPassword(
-      credentials,
-    );
-
-    if (error) {
-      return server.applyAuthResponse(
-        jsonResponse({ error: 'signin_failed', message: error.message }, 401),
-      );
-    }
-
-    return server.applyAuthResponse(
-      jsonResponse(
-        {
-          authenticated: true,
-          user: { id: data.user.id, email: data.user.email ?? null },
-        },
-        200,
-      ),
-    );
-  } catch {
-    return server.applyAuthResponse(
-      jsonResponse({ error: 'auth_provider_unavailable' }, 502),
-    );
-  }
+  if (!credentials) return authJson({ error: 'email_and_password_required' }, 400);
+  return perform(request, bindings, async (auth) => authJson({
+    authenticated: true, user: await auth.signIn(credentials),
+  }));
 }
 
-export async function handleAuthSignOut(
-  request: Request,
-  bindings: SupabaseAuthBindings,
-) {
-  const server = createClient(request, bindings);
-  if (!server) return jsonResponse({ error: 'supabase_not_configured' }, 503);
+export async function handleAuthSignOut(request: Request, bindings: AuthBindings) {
+  if (!isSameOrigin(request, true)) return invalidOrigin();
+  return perform(request, bindings, async (auth) => {
+    await auth.signOut();
+    return authJson({ authenticated: false });
+  });
+}
 
-  try {
-    const { error } = await server.client.auth.signOut({ scope: 'local' });
-    if (error) {
-      return server.applyAuthResponse(
-        jsonResponse({ error: 'signout_failed', message: error.message }, 502),
-      );
-    }
+export async function handleAuthPasswordRecovery(request: Request, bindings: AuthBindings) {
+  if (!isSameOrigin(request)) return invalidOrigin();
+  const email = await readEmail(request);
+  if (!email) return authJson({ error: 'email_required' }, 400);
+  return perform(request, bindings, async (auth) => {
+    await auth.requestPasswordReset(email, new URL('/auth/recovery/start', request.url).toString());
+    return authJson({ sent: true });
+  });
+}
 
-    return server.applyAuthResponse(jsonResponse({ authenticated: false }, 200));
-  } catch {
-    return server.applyAuthResponse(
-      jsonResponse({ error: 'auth_provider_unavailable' }, 502),
-    );
+export async function handleAuthPasswordUpdate(request: Request, bindings: AuthBindings) {
+  if (!isSameOrigin(request, true)) return invalidOrigin();
+  const body = await readBody(request);
+  if (typeof body?.password !== 'string' || !body.password) {
+    return authJson({ error: 'password_required' }, 400);
   }
+  const password = body.password;
+  return perform(request, bindings, async (auth) => authJson({
+    updated: true, user: await auth.updatePassword(password),
+  }));
 }

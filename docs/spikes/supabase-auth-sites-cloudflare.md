@@ -17,7 +17,7 @@ Por tanto, Supabase sigue siendo una opción viable para probar. Se añadió un 
 - Se añadió `GET /api/auth/session` como prueba de estructura: lee la sesión de la petición, consulta `auth.getUser()` en el servidor y devuelve solo el ID y correo del usuario. No expone tokens ni crea contraseñas o sesiones propias.
 - Se añadieron `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout` y `POST /api/auth/resend-confirmation`, además de `/auth/callback` para intercambiar el código PKCE de confirmación por una sesión de Supabase.
 - La pantalla inicial permite ejecutar esos flujos y muestra el resultado de `GET /api/auth/session`. Las contraseñas solo se reciben en memoria para enviarlas a Supabase; no se guardan en D1 ni en otra base propia.
-- `lib/auth/supabase-server.ts` crea un cliente por petición y delega lectura y serialización de cookies a `@supabase/ssr`. Las respuestas de esta ruta usan `Cache-Control: private, no-store`.
+- `resources/auth/server/supabase-server.ts` crea un cliente por petición y delega lectura y serialización de cookies a `@supabase/ssr`. Las respuestas de esta ruta usan `Cache-Control: private, no-store`.
 - `.env.example` fija los nombres iniciales `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`; `env.d.ts` los tipa como bindings de Cloudflare. No se usa una clave `service_role`.
 - En este checkout no están instaladas las dependencias ni configuradas variables reales de Supabase. Tampoco están disponibles Wrangler, Supabase CLI o Docker. No fue posible arrancar el Worker ni hablar con un proyecto de prueba.
 
@@ -27,14 +27,14 @@ La prueba unitaria se ejecuta con:
 
 ```sh
 cp .env.example .env.local
-npm run test:auth
+pnpm test:auth
 ```
 
 La copia `.env.local` sirve de plantilla; se deben reemplazar los valores con los de un proyecto Supabase desechable. El archivo local queda ignorado por Git. El test unitario simula la respuesta del proveedor para comprobar que una sesión ausente se rechaza, que una sesión válida devuelve solo identidad pública y que falta de configuración produce un error claro. **No comprueba conectividad real ni el empaquetado de `@supabase/ssr` en Workers.**
 
 Para la prueba de runtime, el control plane de Cloudflare debe inyectar `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` como variables del Worker; en local se pueden cargar desde `.env.local`. En el proyecto Supabase de prueba también se deben habilitar email/contraseña, configurar el callback local y de preview, y usar una bandeja de correo controlada para confirmación y recuperación.
 
-Con las dependencias instaladas y las variables configuradas, ejecutar `npm run dev` y abrir `http://localhost:3000` (puerto predeterminado de Vinext). La pantalla ofrece registro, login y logout; al entrar, consulta la sesión con `GET /api/auth/session`.
+Con las dependencias instaladas y las variables configuradas, ejecutar `pnpm dev` y abrir `http://localhost:3000` (puerto predeterminado de Vinext). La pantalla ofrece registro, login y logout; al entrar, consulta la sesión con `GET /api/auth/session`.
 
 El callback PKCE original permanece en `GET /auth/callback` para enlaces que ya fueron enviados. Si la plantilla aún usa `{{ .ConfirmationURL }}`, `/auth/confirm/start` reenvía el `code` al callback original; ese flujo conserva la limitación de abrirse en el navegador donde se inició el registro. Los correos nuevos deben usar `TokenHash` y una confirmación explícita para crear la sesión en el navegador que abre el correo, aunque sea otro dispositivo.
 
@@ -78,18 +78,18 @@ El envío requiere SMTP. El servicio de correo de prueba de Supabase tiene un l�
 | Criterio | Estado | Evidencia |
 | --- | --- | --- |
 | Registro, inicio y cierre de sesión; validación de sesión en servidor | Parcial | Ya hay rutas de proveedor y una pantalla de prueba; falta ejecutarlas contra un proyecto Supabase y el Worker real. |
-| Confirmación y recuperación de email | Parcial | La ruta con `TokenHash` y el paso explícito están implementados para confirmación entre dispositivos; falta configurar la plantilla, permitir las URLs y probar el correo real. La recuperación de contraseña sigue pendiente. |
+| Confirmación y recuperación de email | Parcial | La ruta con `TokenHash` y el paso explícito están implementados para confirmación entre dispositivos; falta configurar la plantilla, permitir las URLs y probar el correo real. El issue 6 implementa recuperación mediante TokenHash y actualización autenticada; su configuración y los límites de la comprobación de correo se describen en [Autenticación y seguridad](../04-autenticacion-y-seguridad.md). Falta comprobar la entrega y el cambio de contraseña contra el servicio real. |
 | Límites de Sites y Cloudflare documentados | Parcial | Se documentan caché, cookies, redirects y la incertidumbre específica de Vinext/Sites; el comportamiento publicado todavía debe comprobarse. |
 | Alternativa gestionada si Supabase no es viable | No aplica todavía | No hay evidencia suficiente para declarar Supabase inviable. `@supabase/server` solo cubre un modelo distinto de sesión y no es un reemplazo directo. |
 | Sin contraseñas, hashes ni sesiones propias | Cumplido en el diseño actual | El formulario envía credenciales a Supabase y las sesiones usan cookies administradas por `@supabase/ssr`; no se persisten contraseñas, hashes ni sesiones en almacenamiento propio. |
 
 ## Pruebas necesarias para cerrar el issue
 
-1. Instalar las dependencias bloqueadas y ejecutar `npm run test:auth`.
+1. Instalar las dependencias bloqueadas y ejecutar `pnpm test:auth`.
 2. Configurar un proyecto Supabase desechable y SMTP o una bandeja de prueba controlada; permitir las URLs de callback local y de preview.
 3. Arrancar Vinext/Sites con el plugin de Cloudflare y probar `/api/auth/session` con una cookie ausente, inválida y válida.
 4. En la pantalla de localhost, probar registro y confirmación; inicio de sesión; lectura del usuario con `getUser()` en una ruta de servidor; cierre de sesión y rechazo de la sesión anterior.
-5. Implementar y probar solicitud de recuperación, apertura del enlace, actualización de contraseña y rechazo de la contraseña anterior.
+5. Probar solicitud de recuperación, apertura del enlace, actualización de contraseña y rechazo de la contraseña anterior.
 6. Revisar cookies y encabezados de caché en las respuestas de login, refresh, recuperación y logout, y repetir el recorrido en una URL de preview Sites.
 7. Si falla, aislar primero si el problema es `@supabase/ssr`, Vinext o el plugin de Sites/Cloudflare. Solo declarar Supabase no viable después de esa reproducción y entonces comparar otro proveedor gestionado con el mismo flujo y runtime.
 
