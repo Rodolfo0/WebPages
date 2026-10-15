@@ -191,8 +191,8 @@ export default function AuthPlayground() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-4 py-10 text-slate-900 sm:px-8">
-      <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <main className="grid min-h-dvh place-items-center bg-[#f5f7fb] px-4 py-10 text-slate-900 sm:px-8">
+      <div className="w-full max-w-xl">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">
             Acceso a tu cuenta
@@ -244,7 +244,7 @@ export default function AuthPlayground() {
             </div>
             )
           ) : (
-            <div className="mt-9 max-w-lg">
+            <div className="mt-9">
               <div className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
                 <button
                   type="button"
@@ -353,50 +353,15 @@ export default function AuthPlayground() {
             </div>
           )}
 
-          <div className="mt-8 min-h-6 text-sm">
-            {message && view === 'signed_in' && (
+          {view === 'signed_in' && (message || error) && <div className="mt-8 text-sm">
+            {message && (
               <p role="status" className="text-emerald-700">{message}</p>
             )}
-            {error && view === 'signed_in' && (
+            {error && (
               <p role="alert" className="text-rose-700">{error}</p>
             )}
-          </div>
+          </div>}
         </section>
-
-        <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold">Estado de sesión</h2>
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                view === 'signed_in'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : view === 'unavailable'
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {view === 'loading'
-                ? 'Consultando…'
-                : view === 'signed_in'
-                  ? 'Autenticado'
-                  : view === 'unavailable'
-                    ? 'Sin conexión'
-                    : 'Sin sesión'}
-            </span>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            La sesión se comprueba antes de acceder a la información de tu cuenta.
-          </p>
-          <ol className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm text-slate-600">
-            <li><span className="font-semibold text-slate-900">1.</span> Crea una cuenta de prueba.</li>
-            <li><span className="font-semibold text-slate-900">2.</span> Confirma tu correo.</li>
-            <li><span className="font-semibold text-slate-900">3.</span> Inicia sesión y revisa el estado.</li>
-            <li><span className="font-semibold text-slate-900">4.</span> Cierra sesión y confirma que desaparece.</li>
-          </ol>
-          <p className="mt-5 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500">
-            Solo para desarrollo. No uses contraseñas de otras cuentas.
-          </p>
-        </aside>
       </div>
     </main>
   );

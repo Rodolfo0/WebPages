@@ -11,7 +11,7 @@ test('login validates the server session and logout clears it', async ({ page })
   }
 
   await page.goto('/');
-  await expect(page.getByText('Sin sesión')).toBeVisible();
+  await expect(page.locator('form').getByRole('button', { name: 'Iniciar sesión', exact: true })).toBeEnabled();
   await page.getByLabel('Correo electrónico').fill(confirmedEmail);
   await page.getByLabel('Contraseña').fill(confirmedPassword);
   expect(await page.locator('form').evaluate((form) => (form as HTMLFormElement).checkValidity())).toBe(true);
@@ -28,7 +28,7 @@ test('login validates the server session and logout clears it', async ({ page })
   await expect(page.getByText(confirmedEmail)).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
 
-  await expect(page.getByText('Sin sesión')).toBeVisible();
+  await expect(page.locator('form').getByRole('button', { name: 'Iniciar sesión', exact: true })).toBeEnabled();
   const sessionResponse = await page.evaluate(async () => {
     const response = await fetch('/api/auth/session', { cache: 'no-store' });
     return { status: response.status, body: await response.json() };
