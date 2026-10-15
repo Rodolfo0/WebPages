@@ -60,7 +60,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --mode test --host 127.0.0.1 --port 5180 --strictPort',
+    command: 'pnpm dev --mode test --host 127.0.0.1 --port 5180 --strictPort',
     // Vinext locks by project root; allow this isolated test server beside dev.
     env: { ...inheritedEnvironment, VINEXT_NO_DEV_LOCK: '1' },
     url: baseURL,

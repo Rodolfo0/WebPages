@@ -17,6 +17,9 @@ pnpm test:e2e
   puerto `5180` y llama la ruta real de login contra el proyecto Supabase de
   prueba. Usa credenciales incorrectas deliberadamente, por lo que no crea una
   cuenta.
+- La integración también comprueba el rechazo de sesión ausente, el cambio de
+  contraseña sin usuario y la preparación/validación de estado del enlace de
+  recuperación sin enviar correos ni consumir un token real.
 - `test:e2e` recorre la interfaz con Playwright: inicia sesión con una cuenta de
   prueba ya confirmada, valida la sesión en el servidor y cierra sesión. No crea
   cuentas ni envía correos.
@@ -58,6 +61,15 @@ login también requiere la cuenta confirmada. No guardes una clave `service_role
 ni uses cuentas personales.
 
 ## Pruebas unitarias
+
+El recurso Auth cubre el contrato interno, la proyección de identidad sin
+tokens, el rechazo de sesiones ausentes/inválidas/expiradas, los fallos del
+proveedor, las cookies de renovación y los flujos de registro, login, logout y
+recuperación. La UI comprueba la solicitud neutral de recuperación, la
+confirmación de contraseña y el regreso al formulario cuando vence la sesión.
+La entrega de correo y el cambio real de contraseña requieren una comprobación
+manual con un proyecto y una bandeja dedicados; no se agregan cuentas ni se
+cambian las credenciales de la cuenta usada por el E2E de login.
 
 - Validación de SiteDocument.
 - Valores por defecto de cada bloque.
