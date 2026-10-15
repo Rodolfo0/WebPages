@@ -126,7 +126,18 @@ Los timestamps se guardan como milisegundos Unix en columnas enteras. Los estado
 
 ### Migraciones D1
 
-El esquema Drizzle vive en `db/schema.ts`. `pnpm db:generate` crea el SQL versionado y su snapshot en `drizzle/`; revisa la migración antes de aplicarla. Los triggers de inmutabilidad y pertenencia de la versión publicada se expresan como SQL en la migración porque Drizzle no los representa en el schema TypeScript. Conserva esos triggers al crear cambios posteriores.
+La infraestructura de ambas bases se agrupa en `database/`; la estructura y los comandos están en [database/README.md](../database/README.md).
+
+El esquema Drizzle vive en `database/d1/schema.ts`. `pnpm db:generate` crea el SQL versionado y su snapshot en `database/d1/migrations/`; revisa la migración antes de aplicarla. Los triggers de inmutabilidad y pertenencia de la versión publicada se expresan como SQL en la migración porque Drizzle no los representa en el schema TypeScript. Conserva esos triggers al crear cambios posteriores.
+
+### Migraciones Supabase
+
+Los cambios SQL específicos de Auth viven en `database/supabase/migrations/` y se aplican
+con `supabase --workdir database db push --linked`. Tienen su propio historial en
+`supabase_migrations.schema_migrations`; Wrangler y Drizzle administran solo D1.
+El workflow de producción aplica ambas series antes de desplegar el Worker.
+La configuración de GitHub y el uso local del CLI están en
+[Autenticación y seguridad](04-autenticacion-y-seguridad.md).
 
 ## Futuro de dominios
 

@@ -22,7 +22,7 @@ La aplicación debe ocultar el proveedor detrás de una interfaz pequeña:
       applyResponse(response: Response): Response
     }
 
-`createAuthAdapter(request, bindings)` crea una instancia por petición y selecciona el proveedor. El contrato también incluye registro, login, reenvío de confirmación, solicitud de recuperación, verificación de enlaces y actualización de contraseña. Sus resultados y errores usan tipos internos; nunca devuelven el cliente, la sesión, tokens, metadata ni errores originales de Supabase.
+`createAuthAdapter(request, bindings)` crea una instancia por petición y selecciona el proveedor. El contrato también incluye consulta de existencia de correo (`emailExists`), registro, login, reenvío de confirmación, solicitud de recuperación, verificación de enlaces y actualización de contraseña. Sus resultados y errores usan tipos internos; nunca devuelven el cliente, la sesión, tokens, metadata ni errores originales de Supabase.
 
 La API pública para el servidor se importa desde `resources/auth/server`; los tipos compartidos desde `resources/auth`. Los route handlers de `app/` obtienen los bindings de Cloudflare y delegan en esas entradas.
 
@@ -36,13 +36,57 @@ El resto de la aplicación recibe `{ id, email }`, con email obligatorio, no un 
 
 ## Flujos
 
-- Registro con email y contraseña.
+- Registro en dos pasos: comprobar el email y después solicitar contraseña y confirmación. La UI exige que ambas contraseñas coincidan antes de enviar el registro; la confirmación no se incluye en el payload.
 - Confirmación de email cuando el proveedor lo requiera.
 - Inicio de sesión.
 - Cierre de sesión.
 - Recuperación y cambio de contraseña mediante el proveedor.
 - Renovación y expiración de sesión.
 - Mensaje claro para una sesión inválida o expirada.
+
+### Registro en dos pasos
+
+1. La UI solicita solo el correo y envía `POST /api/auth/signup/check-email` con `{ email }`. La ruta exige el origen de la aplicación, valida el email y devuelve únicamente `{ exists: boolean }`, sin caché. El adaptador consulta `public.auth_email_exists` mediante RPC con la clave publicable existente; no crea cuentas ni envía correos.
+2. Si existe una cuenta (confirmada, pendiente o invitada), la UI vuelve al login con el correo y ofrece iniciar sesión o recuperar acceso. Si no existe, muestra contraseña y confirmación, y mantiene el correo en solo lectura. «Cambiar correo» regresa al primer paso y descarta las contraseñas. Un error de consulta mantiene al usuario en el primer paso; nunca se interpreta como un correo disponible.
+3. El segundo paso envía `POST /api/auth/signup`. La consulta previa no reserva el correo: Supabase sigue siendo responsable de la unicidad y el adaptador conserva el manejo de registros duplicados para cambios ocurridos entre ambos pasos.
+
+#### Configuración en Supabase
+
+La función se crea con [`database/supabase/migrations/20261015000000_add_auth_email_exists.sql`](../database/supabase/migrations/20261015000000_add_auth_email_exists.sql). El CLI aplica solo las migraciones pendientes y registra sus versiones en `supabase_migrations.schema_migrations`; el historial es independiente del de D1. La Data API debe estar habilitada y exponer el esquema `public`.
+
+La función tiene `SECURITY DEFINER` para consultar `auth.users`, fija `search_path = ''` y usa nombres completos de tablas. Solo devuelve la existencia de una coincidencia exacta de correo, ignorando mayúsculas y espacios de los extremos; no devuelve IDs, contraseñas, tokens ni metadata. Revoca los permisos por defecto de `PUBLIC` y concede únicamente ejecución a `anon` y `authenticated`, sin conceder lectura sobre `auth.users`. Esta decisión permite conocer si un correo está registrado también mediante la Data API con la clave publicable.
+
+El workflow `.github/workflows/deploy-production.yml` hace build, aplica las migraciones de Supabase, aplica las de D1 y despliega el Worker. Si falla una migración, no continúa con el despliegue. Una migración completada no se revierte si falla un paso posterior: los cambios de base deben conservar compatibilidad con el Worker anterior. Esta migración agrega una función y no modifica cuentas existentes.
+
+En **GitHub → Settings → Environments → production**, configura:
+
+| Tipo | Nombre | Valor |
+| --- | --- | --- |
+| Secret | `SUPABASE_ACCESS_TOKEN` | Token personal de Supabase, limitado al proyecto de destino. Para `supabase --workdir database link`, necesita lectura de Project Settings, API Keys y API Key Secrets. |
+| Secret | `SUPABASE_DB_PASSWORD` | Contraseña de PostgreSQL del proyecto; no es la contraseña de una cuenta de la aplicación ni una API key. |
+| Variable | `SUPABASE_PROJECT_REF` | Referencia del proyecto, el identificador en `https://supabase.com/dashboard/project/<referencia>`. |
+
+Estos valores solo se usan en el paso de migraciones de GitHub Actions. El Worker conserva `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`, sin secretos administrativos adicionales. La referencia del workflow debe corresponder al proyecto de esas variables.
+
+Para aplicar las migraciones al proyecto gestionado usado en desarrollo o pruebas, instala el CLI de Supabase y ejecuta desde la raíz del repositorio:
+
+```sh
+supabase login
+supabase --workdir database link --project-ref <referencia-del-proyecto>
+supabase --workdir database db push --linked
+```
+
+`--workdir database` hace que el CLI encuentre `database/supabase/config.toml` y sus migraciones. El workflow usa la misma ruta.
+
+El CLI solicita la contraseña de PostgreSQL; no la incluyas en comandos ni archivos versionados. Si ya ejecutaste el SQL manualmente, esta primera migración puede volver a aplicarlo con `create or replace` y registrar su versión. Si el proyecto ya tiene otras migraciones en su historial, hay que sincronizarlas con el repositorio antes del despliegue; el workflow no repara ni reescribe ese historial automáticamente. Los futuros cambios se agregan como migraciones nuevas, sin editar las versiones ya aplicadas.
+
+Si falta la función o su permiso, la API responde `email_check_not_configured` (503) y la UI no avanza.
+
+#### Registro duplicado al enviar la contraseña
+
+El adaptador traduce `user_already_exists`, `email_exists` y una respuesta de registro sin sesión y con `identities` explícitamente vacío a `account_already_exists` (HTTP 409). Supabase puede devolver esta última respuesta al repetir el registro de una cuenta confirmada; también puede ocultar las identidades de una cuenta invitada. La UI conserva el correo, borra la contraseña y vuelve al inicio de sesión con la opción de recuperar el acceso.
+
+Esta segunda detección usa la respuesta del registro, sin listar usuarios con privilegios administrativos ni usar D1 como fuente de cuentas de Auth. Depende de las señales del proveedor: la ausencia del campo `identities` no se interpreta como cuenta existente. El mensaje de confirmación restante es condicional y no asegura que se creó una cuenta o que se entregó un correo. El error 409 hace visible que el correo ya tiene una cuenta en los casos detectados; la recuperación conserva su respuesta neutral.
 
 La confirmación de email debe funcionar cuando se abre el correo en otro navegador o dispositivo. Para lograrlo con `@supabase/ssr`, la plantilla de confirmación envía `TokenHash` a una página de confirmación de la aplicación; una acción explícita verifica el token mediante `verifyOtp()` y crea la sesión en el navegador que la realizó. No se debe depender del verificador PKCE que quedó en el navegador del registro.
 

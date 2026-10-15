@@ -37,6 +37,9 @@ resources/
   <resource>/
     ...                       # se crea al implementar esa capacidad
 shared/                       # código realmente compartido entre recursos
+database/
+  d1/                         # esquema, acceso, configuración y migraciones D1
+  supabase/                   # configuración y migraciones PostgreSQL de Auth
 ```
 
 Cada carpeta de `resources/<resource>/` puede organizarse por responsabilidad —por ejemplo, `server/`, `ui/`, `domain/` o `application/`— según lo necesite el recurso. No se crean carpetas vacías ni capas sin uso.

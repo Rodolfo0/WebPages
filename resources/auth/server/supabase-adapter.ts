@@ -15,6 +15,11 @@ function unavailable() {
     'No se pudo conectar con el servicio de autenticación. Inténtalo de nuevo.');
 }
 
+function accountAlreadyExists() {
+  return new AuthError('account_already_exists', 409,
+    'Ya existe una cuenta con este correo. Inicia sesión o recupera tu contraseña.');
+}
+
 function sessionFailure(error: ProviderError): AuthError | null {
   if (error.name === 'AuthSessionMissingError') {
     return new AuthError('authentication_required', 401, 'Inicia sesión para continuar.');
@@ -124,12 +129,34 @@ export function createSupabaseAuthAdapter(request: Request, bindings: AuthBindin
         return identity(data.user);
       });
     },
+    emailExists(email) {
+      return operation(async () => {
+        const { data, error } = await server.client.rpc('auth_email_exists', {
+          email_to_check: email.trim().toLowerCase(),
+        });
+        if (error?.code === 'PGRST202' || error?.code === '42501') {
+          throw new AuthError('email_check_not_configured', 503,
+            'La verificación de correo no está disponible. Inténtalo más tarde.');
+        }
+        if (error || typeof data !== 'boolean') {
+          throw new AuthError('email_check_failed', 502,
+            'No se pudo verificar el correo. Inténtalo de nuevo.');
+        }
+        return data;
+      });
+    },
     signUp(credentials, redirectTo) {
       return operation(async () => {
         const { data, error } = await server.client.auth.signUp({
           ...credentials, options: { emailRedirectTo: redirectTo },
         });
-        checkOperation(error, new AuthError('signup_failed', 400, 'No se pudo crear la cuenta.'));
+        checkOperation(error, error?.code === 'user_already_exists' || error?.code === 'email_exists'
+          ? accountAlreadyExists()
+          : new AuthError('signup_failed', 400, 'No se pudo crear la cuenta.'));
+        // Supabase can mask repeated signup as success with no session or identities.
+        if (!data.session && data.user?.identities?.length === 0) {
+          throw accountAlreadyExists();
+        }
         forgetUser();
         return { confirmationRequired: !data.session, user: data.user ? identity(data.user) : null };
       });

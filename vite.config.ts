@@ -34,7 +34,7 @@ export default defineConfig(async ({ mode }) => {
             binding: d1,
             database_name: "site-creator-d1",
             database_id: databaseId || LOCAL_D1_DATABASE_ID,
-            migrations_dir: "drizzle",
+            migrations_dir: "database/d1/migrations",
           },
         ]
       : [],

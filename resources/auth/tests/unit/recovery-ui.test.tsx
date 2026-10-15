@@ -22,8 +22,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('password recovery interface', () => {
   it('requests recovery with email only and shows an account-neutral result', async () => {
     render(<AuthPlayground />);
-    await screen.findByText('Sin sesión');
     fireEvent.click(screen.getByRole('button', { name: '¿Olvidaste tu contraseña?' }));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Enviar enlace de recuperación' })).toBeEnabled());
     expect(screen.queryByLabelText('Contraseña')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Correo electrónico'), { target: { value: 'account@example.test' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enviar enlace de recuperación' }));

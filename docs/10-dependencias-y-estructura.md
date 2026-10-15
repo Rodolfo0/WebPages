@@ -22,6 +22,9 @@ Este documento resume las librerías actuales y las dependencias propuestas para
 - `@cloudflare/workers-types`: tipos de Cloudflare Workers, D1 y R2.
 - `wrangler`: desarrollo y configuración de Cloudflare.
 - `drizzle-kit`: generación de migraciones y herramientas de Drizzle.
+- Supabase CLI: herramienta externa para aplicar `database/supabase/migrations/`. GitHub
+  Actions la instala mediante `supabase/setup-cli`; para uso local debe estar
+  instalada en el equipo. No forma parte del runtime del Worker.
 
 ### Estilos y calidad
 
@@ -98,7 +101,11 @@ resources/
   <resource>/
     ...                      # cada capacidad se agrega al implementarla
 shared/                      # utilidades genuinamente compartidas
-db/                          # esquema y acceso D1 compartidos, si aplica
+database/
+  d1/                        # acceso D1, esquema y configuración de Drizzle
+    migrations/              # SQL, snapshots y journal de D1
+  supabase/                  # configuración CLI de Supabase
+    migrations/              # SQL de PostgreSQL para Auth
 vitest.config.ts             # configuración central, casos junto al recurso
 playwright.config.ts         # configuración central, casos junto al recurso
 ```
@@ -109,7 +116,7 @@ playwright.config.ts         # configuración central, casos junto al recurso
 - `resources/<resource>/`: interfaz, lógica de servidor y pruebas pertenecientes a una capacidad del producto.
 - `resources/<resource>/tests/`: pruebas unitarias, de integración y E2E de ese recurso.
 - `shared/`: contratos y utilidades compartidas cuando más de un recurso los necesita.
-- `db/`: esquema y acceso de Drizzle para D1 cuando la persistencia común lo requiera.
+- `database/`: infraestructura de datos, separada por proveedor. `database/d1/` contiene el esquema, acceso y migraciones D1; `database/supabase/` contiene configuración y migraciones de Supabase. Los comandos se ejecutan desde la raíz del repositorio; consulta [la guía de database](../database/README.md).
 - La estructura interna de cada recurso crece con la necesidad; no se añaden capas vacías por anticipado.
 
 El repositorio usa pnpm como gestor de paquetes canónico (`pnpm-lock.yaml` y `pnpm-workspace.yaml`). `package-lock.json` es heredado y no debe actualizarse en cambios rutinarios.
