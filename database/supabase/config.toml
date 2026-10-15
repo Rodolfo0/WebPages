@@ -1,0 +1,9 @@
+# Local CLI identifier. The remote project is selected by `supabase link`.
+project_id = "webpages"
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = false
