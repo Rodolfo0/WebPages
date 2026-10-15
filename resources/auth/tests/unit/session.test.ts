@@ -36,7 +36,7 @@ describe('GET /api/auth/session handler', () => {
     const response = await handleAuthSession(request, bindings);
 
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ authenticated: false });
+    expect(await response.json()).toMatchObject({ authenticated: false, error: 'authentication_required' });
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(createSupabaseServerClient).toHaveBeenCalledWith(request, bindings);
     expect(applyAuthResponse).toHaveBeenCalledOnce();
@@ -66,7 +66,7 @@ describe('GET /api/auth/session handler', () => {
     const response = await handleAuthSession(new Request(request.url), {});
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: 'supabase_not_configured' });
+    expect(await response.json()).toMatchObject({ error: 'auth_not_configured' });
     expect(createSupabaseServerClient).toHaveBeenCalledOnce();
   });
 });

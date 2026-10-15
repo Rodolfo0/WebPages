@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Prueba de Supabase Auth',
-  description: 'Registro y sesión de prueba para Supabase Auth en Cloudflare.',
+  title: 'Acceso a tu cuenta',
+  description: 'Regístrate, inicia sesión y recupera el acceso a tu cuenta.',
 };
 
 export default function RootLayout({

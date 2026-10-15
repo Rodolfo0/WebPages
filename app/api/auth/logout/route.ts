@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { handleAuthSignOut } from '@/resources/auth/server/actions';
+import { handleAuthSignOut } from '@/resources/auth/server';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { handleAuthSignIn } from '@/resources/auth/server/actions';
+import { handleAuthSignIn } from '@/resources/auth/server';
 
 export const dynamic = 'force-dynamic';
 

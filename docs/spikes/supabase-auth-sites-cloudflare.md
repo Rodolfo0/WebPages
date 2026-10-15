@@ -78,7 +78,7 @@ El envío requiere SMTP. El servicio de correo de prueba de Supabase tiene un l�
 | Criterio | Estado | Evidencia |
 | --- | --- | --- |
 | Registro, inicio y cierre de sesión; validación de sesión en servidor | Parcial | Ya hay rutas de proveedor y una pantalla de prueba; falta ejecutarlas contra un proyecto Supabase y el Worker real. |
-| Confirmación y recuperación de email | Parcial | La ruta con `TokenHash` y el paso explícito están implementados para confirmación entre dispositivos; falta configurar la plantilla, permitir las URLs y probar el correo real. La recuperación de contraseña sigue pendiente. |
+| Confirmación y recuperación de email | Parcial | La ruta con `TokenHash` y el paso explícito están implementados para confirmación entre dispositivos; falta configurar la plantilla, permitir las URLs y probar el correo real. El issue 6 implementa recuperación mediante TokenHash y actualización autenticada; su configuración y los límites de la comprobación de correo se describen en [Autenticación y seguridad](../04-autenticacion-y-seguridad.md). Falta comprobar la entrega y el cambio de contraseña contra el servicio real. |
 | Límites de Sites y Cloudflare documentados | Parcial | Se documentan caché, cookies, redirects y la incertidumbre específica de Vinext/Sites; el comportamiento publicado todavía debe comprobarse. |
 | Alternativa gestionada si Supabase no es viable | No aplica todavía | No hay evidencia suficiente para declarar Supabase inviable. `@supabase/server` solo cubre un modelo distinto de sesión y no es un reemplazo directo. |
 | Sin contraseñas, hashes ni sesiones propias | Cumplido en el diseño actual | El formulario envía credenciales a Supabase y las sesiones usan cookies administradas por `@supabase/ssr`; no se persisten contraseñas, hashes ni sesiones en almacenamiento propio. |
@@ -89,7 +89,7 @@ El envío requiere SMTP. El servicio de correo de prueba de Supabase tiene un l�
 2. Configurar un proyecto Supabase desechable y SMTP o una bandeja de prueba controlada; permitir las URLs de callback local y de preview.
 3. Arrancar Vinext/Sites con el plugin de Cloudflare y probar `/api/auth/session` con una cookie ausente, inválida y válida.
 4. En la pantalla de localhost, probar registro y confirmación; inicio de sesión; lectura del usuario con `getUser()` en una ruta de servidor; cierre de sesión y rechazo de la sesión anterior.
-5. Implementar y probar solicitud de recuperación, apertura del enlace, actualización de contraseña y rechazo de la contraseña anterior.
+5. Probar solicitud de recuperación, apertura del enlace, actualización de contraseña y rechazo de la contraseña anterior.
 6. Revisar cookies y encabezados de caché en las respuestas de login, refresh, recuperación y logout, y repetir el recorrido en una URL de preview Sites.
 7. Si falla, aislar primero si el problema es `@supabase/ssr`, Vinext o el plugin de Sites/Cloudflare. Solo declarar Supabase no viable después de esa reproducción y entonces comparar otro proveedor gestionado con el mismo flujo y runtime.
 

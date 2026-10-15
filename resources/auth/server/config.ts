@@ -1,9 +1,9 @@
-export interface SupabaseAuthBindings {
+export interface AuthBindings {
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
 }
 
-export function getSupabaseAuthConfig(bindings: SupabaseAuthBindings) {
+export function getSupabaseAuthConfig(bindings: AuthBindings) {
   const url = bindings.SUPABASE_URL?.trim();
   const publishableKey = bindings.SUPABASE_PUBLISHABLE_KEY?.trim();
 

@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { handleAuthCallback } from '@/resources/auth/server/callback';
+import { handleAuthCallback } from '@/resources/auth/server';
 
 export const dynamic = 'force-dynamic';
 

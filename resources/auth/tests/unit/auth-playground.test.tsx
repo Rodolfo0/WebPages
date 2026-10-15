@@ -51,7 +51,7 @@ describe('AuthPlayground in JSDOM', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reenviar confirmación' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Supabase enviará un nuevo enlace',
+      'se enviará un nuevo enlace',
     );
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/resend-confirmation',

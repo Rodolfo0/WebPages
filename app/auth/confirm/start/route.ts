@@ -1,4 +1,4 @@
-import { handleAuthEmailConfirmationStart } from '@/resources/auth/server/callback';
+import { handleAuthEmailConfirmationStart } from '@/resources/auth/server';
 
 export const dynamic = 'force-dynamic';
 
