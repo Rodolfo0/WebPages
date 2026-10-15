@@ -3,6 +3,7 @@ export { withAuthUser } from './with-user';
 export { handleAuthSession } from './session';
 export {
   handleAuthSignIn, handleAuthSignOut, handleAuthSignUp,
+  handleAuthCheckSignupEmail,
   handleAuthResendSignupConfirmation, handleAuthPasswordRecovery, handleAuthPasswordUpdate,
 } from './actions';
 export {

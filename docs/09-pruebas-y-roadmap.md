@@ -47,6 +47,9 @@ varios recursos se guarda junto al recurso dueño del flujo principal.
    correo.
 2. Copia `.env.test.example` a `.env.test.local` y asigna la URL y la clave
    publicable de ese proyecto. El archivo local está ignorado por Git.
+   Para utilizar el registro en dos pasos, aplica también las migraciones de
+   `database/supabase/migrations/` al proyecto con `supabase --workdir database link` y `supabase --workdir database db push --linked`,
+   como indica [Autenticación y seguridad](04-autenticacion-y-seguridad.md).
 3. Crea una cuenta de prueba en ese proyecto, confirma su correo una sola vez y
    añade su email y contraseña a `SUPABASE_E2E_EMAIL` y
    `SUPABASE_E2E_PASSWORD` en `.env.test.local`.

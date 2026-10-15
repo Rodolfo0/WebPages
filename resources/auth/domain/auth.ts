@@ -12,6 +12,9 @@ export type AuthErrorCode =
   | 'signin_failed'
   | 'email_confirmation_required'
   | 'signup_failed'
+  | 'account_already_exists'
+  | 'email_check_failed'
+  | 'email_check_not_configured'
   | 'confirmation_resend_failed'
   | 'signout_failed'
   | 'recovery_failed'
@@ -35,6 +38,7 @@ export interface AuthAdapter {
   getUser(): Promise<AuthUser | null>;
   requireUser(): Promise<AuthUser>;
   signIn(credentials: AuthCredentials): Promise<AuthUser>;
+  emailExists(email: string): Promise<boolean>;
   signUp(credentials: AuthCredentials, redirectTo: string): Promise<AuthSignUpResult>;
   resendConfirmation(email: string, redirectTo: string): Promise<void>;
   requestPasswordReset(email: string, redirectTo: string): Promise<void>;

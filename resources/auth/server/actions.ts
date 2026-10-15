@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { AuthAdapter, AuthCredentials } from '../domain/auth';
 import { createAuthAdapter } from './auth';
 import type { AuthBindings } from './config';
@@ -42,6 +43,17 @@ async function perform(
 
 function invalidOrigin() {
   return authJson({ error: 'invalid_origin', message: 'La solicitud debe venir de esta aplicación.' }, 403);
+}
+
+export async function handleAuthCheckSignupEmail(request: Request, bindings: AuthBindings) {
+  if (!isSameOrigin(request, true)) return invalidOrigin();
+  const email = await readEmail(request);
+  if (!email || !z.email().max(254).safeParse(email).success) {
+    return authJson({ error: 'invalid_email', message: 'Ingresa un correo electrónico válido.' }, 400);
+  }
+  return perform(request, bindings, async (auth) => authJson({
+    exists: await auth.emailExists(email),
+  }));
 }
 
 export async function handleAuthSignUp(request: Request, bindings: AuthBindings) {
