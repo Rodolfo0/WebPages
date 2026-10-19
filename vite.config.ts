@@ -4,7 +4,7 @@ import { defineConfig, loadEnv } from "vite";
 import { sites } from "@openai/sites-vite-plugin";
 import tailwindcss from "@tailwindcss/postcss";
 
-import hostingConfig from "./.openai/hosting.json";
+import hostingConfig from "./.openai/hosting.json" with { type: "json" };
 
 const LOCAL_D1_DATABASE_ID = "00000000-0000-4000-8000-000000000000";
 
