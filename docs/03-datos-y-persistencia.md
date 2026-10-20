@@ -145,6 +145,8 @@ La infraestructura de ambas bases se agrupa en `database/`; la estructura y los 
 
 El esquema Drizzle vive en `database/d1/schema.ts`. `pnpm db:generate` crea el SQL versionado y su snapshot en `database/d1/migrations/`; revisa la migración antes de aplicarla. Los triggers de inmutabilidad y pertenencia de la versión publicada se expresan como SQL en la migración porque Drizzle no los representa en el schema TypeScript. Conserva esos triggers al crear cambios posteriores.
 
+El esquema y la migración inicial actuales todavía incluyen `projects.owner_id`. Como D1 no tiene datos, reemplaza ese baseline por el modelo con membresías y sincroniza `schema.ts`, el SQL inicial y el snapshot de Drizzle. Si `0000` ya se aplicó a la D1 remota, vuelve a crear la base vacía y actualiza `D1_DATABASE_ID` en GitHub; si aún no se aplicó, basta con actualizar el baseline antes del primer despliegue. Así se evita una migración `DROP`. Consulta [Base de datos](../database/README.md) para el procedimiento.
+
 ### Migraciones Supabase
 
 Los cambios SQL específicos de Auth viven en `database/supabase/migrations/` y se aplican
