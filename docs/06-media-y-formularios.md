@@ -9,10 +9,14 @@ Flujo recomendado:
 1. El navegador solicita una subida autorizada.
 2. El servidor valida sesión, proyecto, tipo y tamaño.
 3. El archivo se guarda en R2 con una clave generada.
-4. D1 registra metadata, propietario y proyecto.
+4. D1 registra metadata y la relación con el proyecto; la autorización se deriva de la membresía y los permisos.
 5. El editor recibe un identificador de asset y lo guarda en el documento.
 
 El navegador nunca debe poder elegir arbitrariamente la clave final de R2.
+
+### Acceso a assets
+
+El editor puede leer y administrar assets privados del proyecto solo con una membresía activa y el permiso requerido. La URL pública sirve un asset únicamente cuando el snapshot señalado actualmente por `projects.published_version_id` lo referencia. Los assets que solo aparecen en el borrador, o que dejaron de estar en la publicación activa, no se sirven públicamente. La ruta debe comprobar esa relación en el servidor; no basta con conocer el ID del asset o su clave R2.
 
 ## Validaciones
 
@@ -36,7 +40,7 @@ El bloque de contacto debe enviar mensajes a una ruta pública asociada al proye
 - Ignorar o marcar envíos con honeypot.
 - Aplicar límite por IP o por ventana de tiempo.
 - Guardar el mensaje en form_submissions.
-- No revelar datos privados del propietario.
+- No revelar datos privados del proyecto ni de sus miembros.
 
 La bandeja privada permitirá listar mensajes, abrir el detalle, marcar como leído y eliminar o archivar.
 

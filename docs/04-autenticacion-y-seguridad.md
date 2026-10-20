@@ -50,6 +50,8 @@ El resto de la aplicación recibe `{ id, email }`, con email obligatorio, no un 
 2. Si existe una cuenta (confirmada, pendiente o invitada), la UI vuelve al login con el correo y ofrece iniciar sesión o recuperar acceso. Si no existe, muestra contraseña y confirmación, y mantiene el correo en solo lectura. «Cambiar correo» regresa al primer paso y descarta las contraseñas. Un error de consulta mantiene al usuario en el primer paso; nunca se interpreta como un correo disponible.
 3. El segundo paso envía `POST /api/auth/signup`. La consulta previa no reserva el correo: Supabase sigue siendo responsable de la unicidad y el adaptador conserva el manejo de registros duplicados para cambios ocurridos entre ambos pasos.
 
+Después de que Supabase crea la cuenta, el servidor asegura la fila correspondiente en D1 usando el `id` y el email devueltos por el proveedor. La operación es idempotente por `users.auth_subject`. Si falla la escritura local, el siguiente inicio de sesión vuelve a comprobar la fila y la crea si hace falta; ninguna consulta privada continúa sin una identidad local resuelta. Nunca se toma el ID de usuario del cliente.
+
 #### Configuración en Supabase
 
 La función se crea con [`database/supabase/migrations/20261015000000_add_auth_email_exists.sql`](../database/supabase/migrations/20261015000000_add_auth_email_exists.sql). El CLI aplica solo las migraciones pendientes y registra sus versiones en `supabase_migrations.schema_migrations`; el historial es independiente del de D1. La Data API debe estar habilitada y exponer el esquema `public`.
@@ -108,13 +110,17 @@ La pantalla de nueva contraseña recibe un `AuthUser` validado. `POST /api/auth/
 
 La autenticación identifica al usuario. La autorización decide qué puede hacer con cada recurso.
 
-Cada consulta privada debe comprobar el propietario en el servidor. No basta con ocultar botones en React. Las operaciones que requieren esta comprobación incluyen:
+Cada consulta privada debe resolver `AuthUser.id` contra `users.auth_subject` y comprobar en el servidor una membresía activa en el proyecto y el permiso requerido. No basta con ocultar botones en React. Las operaciones que requieren esta comprobación incluyen:
 
 - Leer o modificar un proyecto.
 - Subir, eliminar o usar un asset.
 - Leer mensajes.
 - Crear una versión publicada.
 - Generar una exportación.
+
+Cada proyecto tiene un único rol de sistema `owner`, asignado a entre una y tres membresías activas. Todos los owners tienen permisos completos; un owner puede agregar o quitar owners si el proyecto conserva al menos uno y nunca supera tres. Los roles personalizados son propios del proyecto y solo pueden usar los permisos asignados por un owner. Publicar, consultar/gestionar mensajes y exportar requieren el permiso correspondiente; los permisos para gestionar roles, owners o eliminar el proyecto quedan reservados al rol `owner`.
+
+El acceso público a archivos tiene una excepción acotada: solo se sirve un asset si está referenciado por la versión que el proyecto tiene publicada actualmente. La lectura y administración desde el editor siguen siendo privadas y dependen de la membresía y los permisos; que un cliente conozca un `assetId` o `projectId` no concede acceso.
 
 ## Reglas de seguridad
 
@@ -133,7 +139,10 @@ Cada consulta privada debe comprobar el propietario en el servidor. No basta con
 - Registro e inicio de sesión correctos.
 - Sesión ausente, inválida y expirada.
 - Acceso a un proyecto de otro usuario.
+- Creación idempotente de la fila D1 al registrar y reconciliación al siguiente inicio de sesión si falla el primer intento.
+- Límite de tres owners activos por proyecto y protección contra quitar al último.
 - Manipulación de IDs en rutas y cuerpos.
+- Rechazo de assets no referenciados por la versión publicada en rutas públicas.
 - Subida de archivos no permitidos.
 - Enlaces con protocolos inseguros.
 - Recuperación de contraseña sin revelar si un email existe.

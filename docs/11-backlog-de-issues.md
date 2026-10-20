@@ -99,11 +99,14 @@ Criterios de aceptación:
 Criterios de aceptación:
 
 - Existen tablas para `users`, `projects`, `site_versions`, `assets` y `form_submissions`.
-- Los proyectos se relacionan con un propietario.
+- La fila de `users` se relaciona con `auth_subject`; los proyectos guardan `created_by` como procedencia, no como fuente de autorización.
+- Existen `project_permissions`, `project_roles`, `project_role_permissions` y `project_members`; cada proyecto inicia con el rol `owner` y la membresía del usuario que lo creó.
+- Un proyecto admite de uno a tres owners activos, sin exceder el máximo ni eliminar al último.
+- Los roles personalizados son propios del proyecto y guardan los permisos explícitamente concedidos; el proyecto se crea sin roles personalizados hasta que un owner los defina desde un preset.
 - Los slugs tienen la unicidad necesaria.
 - Las versiones publicadas no se modifican.
 - D1 conserva metadata de assets, mientras R2 conserva sus bytes.
-- Existen índices para propietario, slug, proyecto, estado y fecha.
+- Existen índices para membresías por usuario/proyecto/estado, slug, recursos por proyecto, estado y fecha.
 
 ### Issue 6. Implementar el adaptador de autenticación
 
@@ -115,10 +118,11 @@ Criterios de aceptación:
 
 - La aplicación dispone de operaciones equivalentes a `getUser`, `requireUser` y `signOut`.
 - Funcionan registro, inicio de sesión, cierre de sesión y recuperación.
+- Al crear una cuenta se crea idempotentemente su fila D1; si falla, el siguiente inicio de sesión la busca y crea si falta.
 - Se detectan sesiones expiradas o inválidas.
 - Las superficies privadas reciben un usuario autenticado, no un objeto específico del proveedor.
 
-### Issue 7. Aplicar autorización por propietario
+### Issue 7. Aplicar autorización por proyecto
 
 - Tipo: `security`, `P0`
 - Objetivo: impedir el acceso a recursos ajenos aunque el usuario manipule las peticiones.
@@ -126,21 +130,25 @@ Criterios de aceptación:
 
 Criterios de aceptación:
 
-- Cada consulta privada valida el propietario en el servidor.
-- Un usuario no puede leer ni modificar proyectos ajenos.
+- Cada consulta privada valida en el servidor una membresía activa y el permiso requerido para el proyecto.
+- Un usuario sin membresía activa o sin el permiso requerido no puede leer ni modificar el proyecto.
 - La regla se aplica también a assets, mensajes, publicaciones y exportaciones.
+- El rol `owner` tiene acceso completo, con un máximo de tres owners activos por proyecto y sin permitir quitar al último.
+- Roles como Editor o Lector se crean solo cuando un owner los solicita, usando presets como punto de partida.
+- Un asset solo puede servirse públicamente cuando está referenciado por la versión publicada activa; su gestión en el editor es privada.
 - Manipular un `projectId` no permite acceder a otro proyecto.
 - Los logs de error no guardan contraseñas, tokens ni contenido sensible innecesario.
 
 ### Issue 8. Crear dashboard y CRUD de proyectos
 
 - Tipo: `feature`, `P0`
-- Objetivo: permitir administrar varios proyectos propios.
+- Objetivo: permitir administrar desde el dashboard los proyectos a los que el usuario tiene acceso.
 - Dependencias: Issues 5, 6 y 7.
 
 Criterios de aceptación:
 
-- El usuario puede listar, crear, editar y eliminar sus proyectos.
+- El usuario puede listar, crear, editar y eliminar proyectos solo si su membresía y permiso autorizan cada operación.
+- La creación registra `created_by`, el rol de sistema `owner` y la membresía inicial en una operación atómica.
 - Puede crear un proyecto desde la plantilla de portafolio.
 - Cada proyecto recibe un nombre y un slug válidos.
 - El dashboard muestra si existe borrador y si hay una versión publicada.
@@ -292,19 +300,18 @@ Criterios de aceptación:
 - Valida nombre, email y mensaje.
 - Incluye honeypot y límite de envíos.
 - Guarda los mensajes en `form_submissions`.
-- No expone datos privados del propietario.
+- No expone datos privados del proyecto ni de sus miembros.
 
 ### Issue 19. Crear bandeja privada de mensajes
 
 - Tipo: `feature`, `P0`
-- Objetivo: permitir al propietario consultar y organizar los mensajes recibidos.
+- Objetivo: permitir a los owners y miembros autorizados consultar y organizar los mensajes recibidos.
 - Dependencias: Issues 7 y 18.
 
 Criterios de aceptación:
 
-- El propietario puede listar y abrir mensajes.
-- Puede marcar mensajes como leídos.
-- Puede archivarlos o eliminarlos.
+- Owners y miembros con `messages:read` pueden listar y abrir mensajes.
+- Owners y miembros con `messages:manage` pueden marcarlos como leídos, archivarlos o eliminarlos.
 - Un usuario no puede ver mensajes de otro proyecto.
 
 ## Hito 4: publicación

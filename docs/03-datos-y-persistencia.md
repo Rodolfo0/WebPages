@@ -58,10 +58,12 @@ Tablas iniciales sugeridas:
 
 `auth_subject` es el ID que entrega Supabase Auth y es único. La aplicación no guarda contraseñas, hashes ni tokens. Los IDs internos son UUID generados en el servidor.
 
+Al crear una cuenta, el servidor crea también su fila local usando el ID y el email devueltos por Supabase Auth. La operación es idempotente por `auth_subject`. Si falla, al iniciar sesión se comprueba la fila y se crea si aún falta, antes de permitir operaciones privadas. La identidad nunca se toma del cuerpo de una petición.
+
 ### projects
 
 - id
-- owner_id
+- created_by
 - name
 - slug
 - status
@@ -72,7 +74,18 @@ Tablas iniciales sugeridas:
 
 El slug debe ser único dentro de la modalidad de URL administrada.
 
+`created_by` conserva quién creó el proyecto, pero no concede acceso. La autorización se deriva de `project_members`. Cada proyecto tiene un único rol de sistema `owner`, asignable a un máximo de tres membresías activas. Al crear el proyecto, se crean en una sola transacción el rol y la membresía owner inicial. Siempre debe quedar al menos un owner activo.
+
 `draft_document_json` conserva el `SiteDocument` completo como JSON validado por la aplicación y por la restricción `json_valid` de D1. El slug se mantiene también en la columna indexada para resolver `/s/:slug`; ambas copias deben actualizarse juntas.
+
+### Autorización por proyecto
+
+- `project_permissions`: catálogo global de permisos con código estable, descripción y marca de si puede asignarse a roles personalizados.
+- `project_roles`: roles vinculados a un proyecto. Cada proyecto tiene solo el rol de sistema `owner` al crearse; los owners pueden crear roles personalizados para ese proyecto.
+- `project_role_permissions`: permisos globales concedidos a cada rol del proyecto. La referencia al rol debe impedir asignar un rol de otro proyecto.
+- `project_members`: membresía de un usuario local en un proyecto, con rol y estado. La unicidad `(project_id, user_id)` evita membresías duplicadas, pero permite hasta tres owners distintos. La base y las operaciones del servidor deben impedir una cuarta membresía owner activa y también impedir revocar la última.
+
+Los owners tienen todos los permisos. `sharing:manage`, `owners:manage` y `project:delete` son exclusivos del rol de sistema `owner`. Los roles personalizados solo reciben permisos explícitamente asignados por un owner; esto puede incluir publicar, consultar o gestionar mensajes y exportar. Los presets (por ejemplo, Editor y Lector) son configuraciones iniciales para crear roles personalizados; no se crean automáticamente como roles del proyecto ni necesitan una fila propia en D1.
 
 ### site_versions
 
@@ -96,6 +109,8 @@ Cada fila representa un snapshot publicado. Un trigger de D1 rechaza cualquier `
 - alt_text
 - created_at
 
+Los bytes y metadata se administran de forma privada según la membresía y permisos del proyecto. La ruta pública solo puede servir un asset si el snapshot que apunta actualmente `projects.published_version_id` lo referencia; un asset usado solo por el borrador no es público.
+
 ### form_submissions
 
 - id
@@ -110,13 +125,13 @@ Cada fila representa un snapshot publicado. Un trigger de D1 rechaza cualquier `
 
 R2 almacenará los bytes de imágenes y exportaciones. D1 solo conservará metadata, relaciones de propiedad y claves de objetos.
 
-Las claves de objetos no deben depender únicamente del nombre original. Deben incluir el usuario, el proyecto y un identificador generado por la aplicación. `assets.r2_key` es única; `filename`, `content_type`, `byte_size`, `alt_text` y fechas son metadata. La fila del asset se relaciona con el proyecto y obtiene su propietario mediante esa relación.
+Las claves de objetos no deben depender únicamente del nombre original. Deben incluir el proyecto y un identificador generado por la aplicación. `assets.r2_key` es única; `filename`, `content_type`, `byte_size`, `alt_text` y fechas son metadata. La fila del asset se relaciona con el proyecto y hereda el acceso permitido por sus membresías y roles.
 
 ## Índices
 
 Crear índices para las consultas reales del MVP:
 
-- Proyectos por owner_id.
+- Membresías por usuario, proyecto y estado; roles por proyecto.
 - Proyecto por slug.
 - Versiones por project_id y fecha.
 - Assets por project_id.
