@@ -33,12 +33,11 @@ apunta a `database/d1/migrations/`. El acceso del servidor se importa desde
 
 ### Reemplazar el baseline de una D1 remota vacía
 
-El baseline actual contiene `projects.owner_id`, y la D1 remota no tiene datos.
-Antes de aplicar el modelo final, actualiza `database/d1/schema.ts`, el SQL de la
-migración inicial y su snapshot `database/d1/migrations/meta/0000_snapshot.json`
-de forma consistente. D1 registra las migraciones ya aplicadas; editar el SQL no
-vuelve a ejecutar una migración con el mismo nombre. Si `0000` ya está aplicada,
-elimina y vuelve a crear `site-creator-d1` solo mientras siga vacía:
+El baseline local inicial ahora usa `projects.created_by` y membresías. La D1
+remota puede seguir registrada con la versión anterior de `0000`, que usaba
+`projects.owner_id`. D1 registra las migraciones ya aplicadas; editar el SQL no
+vuelve a ejecutar una migración con el mismo nombre. Si `0000` ya está aplicada
+en remoto, elimina y vuelve a crear `site-creator-d1` solo mientras siga vacía:
 
 ```sh
 pnpm exec wrangler d1 delete site-creator-d1
@@ -47,9 +46,9 @@ pnpm exec wrangler d1 create site-creator-d1
 
 La base nueva tendrá otro UUID. Actualiza la variable `D1_DATABASE_ID` del
 Environment `production` en GitHub y ejecuta el workflow de despliegue; este
-reconstruye la configuración y aplica las migraciones remotas antes de publicar
-el Worker. Si `0000` aún no se aplicó, basta con actualizar el esquema inicial y
-aplicarlo en el primer despliegue. Los comandos de borrado/creación son remotos y
+reconstruye la configuración y aplica el nuevo baseline antes de publicar el
+Worker. Si `0000` aún no se aplicó, el primer despliegue puede aplicar el baseline
+actual sin recrear la base. Los comandos de borrado/creación son remotos y
 eliminan la base anterior.
 
 La configuración de Drizzle usa rutas relativas a la raíz del repositorio.

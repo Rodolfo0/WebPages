@@ -84,6 +84,7 @@ const documentShape = {
 export type BlockSchemaDefinition = {
   propsSchema: z.ZodType;
   defaultProps: Record<string, JsonValue>;
+  assetIdsFromProps?: (props: Record<string, JsonValue>) => readonly string[];
 };
 
 export type BlockSchemaRegistry = Readonly<Record<string, BlockSchemaDefinition>>;
@@ -260,3 +261,27 @@ export function createSiteDocumentSchema(registry: BlockSchemaRegistry) {
 export type SiteDocumentSchema = ReturnType<typeof createSiteDocumentSchema>;
 export type SiteDocument = z.output<SiteDocumentSchema>;
 export type SiteDocumentInput = z.input<SiteDocumentSchema>;
+
+export function collectSiteDocumentAssetIds(
+  registry: BlockSchemaRegistry,
+  input: unknown,
+) {
+  const document = createSiteDocumentSchema(registry).parse(input);
+  const assetIds = new Set<string>();
+
+  for (const page of document.pages) {
+    for (const block of page.blocks) {
+      const selectAssetIds = registry[block.type]?.assetIdsFromProps;
+      if (!selectAssetIds) continue;
+
+      for (const assetId of selectAssetIds(block.props)) {
+        if (typeof assetId !== 'string' || !assetId.trim()) {
+          throw new TypeError(`El bloque "${block.type}" produjo una referencia de asset inválida.`);
+        }
+        assetIds.add(assetId);
+      }
+    }
+  }
+
+  return [...assetIds];
+}

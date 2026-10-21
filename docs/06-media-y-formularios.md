@@ -16,7 +16,7 @@ El navegador nunca debe poder elegir arbitrariamente la clave final de R2.
 
 ### Acceso a assets
 
-El editor puede leer y administrar assets privados del proyecto solo con una membresía activa y el permiso requerido. La URL pública sirve un asset únicamente cuando el snapshot señalado actualmente por `projects.published_version_id` lo referencia. Los assets que solo aparecen en el borrador, o que dejaron de estar en la publicación activa, no se sirven públicamente. La ruta debe comprobar esa relación en el servidor; no basta con conocer el ID del asset o su clave R2.
+El editor puede leer y administrar assets privados del proyecto solo con una membresía activa y el permiso requerido. Al publicar, el servidor valida el documento y extrae los IDs desde selectores declarados por cada tipo de bloque; guarda esa lista junto al snapshot inmutable. La URL pública solo sirve assets de esa lista en la versión señalada actualmente por `projects.published_version_id`. Los assets que solo aparecen en el borrador, los IDs escritos como texto común o los que dejaron la publicación activa no se sirven públicamente. La ruta debe comprobar esa relación en el servidor; no basta con conocer el ID del asset o su clave R2.
 
 ## Validaciones
 

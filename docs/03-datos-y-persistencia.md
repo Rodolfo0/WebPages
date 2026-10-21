@@ -83,7 +83,7 @@ El slug debe ser único dentro de la modalidad de URL administrada.
 - `project_permissions`: catálogo global de permisos con código estable, descripción y marca de si puede asignarse a roles personalizados.
 - `project_roles`: roles vinculados a un proyecto. Cada proyecto tiene solo el rol de sistema `owner` al crearse; los owners pueden crear roles personalizados para ese proyecto.
 - `project_role_permissions`: permisos globales concedidos a cada rol del proyecto. La referencia al rol debe impedir asignar un rol de otro proyecto.
-- `project_members`: membresía de un usuario local en un proyecto, con rol y estado. La unicidad `(project_id, user_id)` evita membresías duplicadas, pero permite hasta tres owners distintos. La base y las operaciones del servidor deben impedir una cuarta membresía owner activa y también impedir revocar la última.
+- `project_members`: membresía de un usuario local en un proyecto, con rol y estado `active` o `inactive`. La clave `(project_id, user_id)` evita membresías duplicadas, pero permite hasta tres owners distintos. Triggers de D1 y operaciones del servidor impiden una cuarta membresía owner activa y revocar o eliminar la última.
 
 Los owners tienen todos los permisos. `sharing:manage`, `owners:manage` y `project:delete` son exclusivos del rol de sistema `owner`. Los roles personalizados solo reciben permisos explícitamente asignados por un owner; esto puede incluir publicar, consultar o gestionar mensajes y exportar. Los presets (por ejemplo, Editor y Lector) son configuraciones iniciales para crear roles personalizados; no se crean automáticamente como roles del proyecto ni necesitan una fila propia en D1.
 
@@ -92,11 +92,12 @@ Los owners tienen todos los permisos. `sharing:manage`, `owners:manage` y `proje
 - id
 - project_id
 - document_json
+- referenced_asset_ids_json
 - document_version
 - created_at
 - published_at
 
-Cada fila representa un snapshot publicado. Un trigger de D1 rechaza cualquier `UPDATE`; volver a publicar crea otra fila. `published_version_id` solo puede apuntar a una versión del mismo proyecto. Al eliminar un proyecto, sus versiones se eliminan en cascada.
+Cada fila representa un snapshot publicado. `referenced_asset_ids_json` guarda un arreglo JSON de IDs obtenido por el servidor al validar el documento: cada tipo de bloque declara qué props contienen referencias reales a assets. No se buscan IDs en textos arbitrarios. Un trigger de D1 rechaza cualquier `UPDATE`, así que el documento y sus referencias permanecen inmutables; volver a publicar crea otra fila. `published_version_id` solo puede apuntar a una versión del mismo proyecto. Al eliminar un proyecto, sus versiones se eliminan en cascada.
 
 ### assets
 
@@ -109,7 +110,7 @@ Cada fila representa un snapshot publicado. Un trigger de D1 rechaza cualquier `
 - alt_text
 - created_at
 
-Los bytes y metadata se administran de forma privada según la membresía y permisos del proyecto. La ruta pública solo puede servir un asset si el snapshot que apunta actualmente `projects.published_version_id` lo referencia; un asset usado solo por el borrador no es público.
+Los bytes y metadata se administran de forma privada según la membresía y permisos del proyecto. La ruta pública solo puede servir un asset si pertenece al proyecto y su ID está en `referenced_asset_ids_json` del snapshot apuntado actualmente por `projects.published_version_id`; un asset usado solo por el borrador no es público.
 
 ### form_submissions
 
@@ -137,7 +138,7 @@ Crear índices para las consultas reales del MVP:
 - Assets por project_id.
 - Mensajes por project_id, estado y fecha.
 
-Los timestamps se guardan como milisegundos Unix en columnas enteras. Los estados permitidos son `draft`, `published` y `archived` para proyectos; `unread`, `read` y `archived` para mensajes.
+Los timestamps se guardan como milisegundos Unix en columnas enteras. Los estados permitidos son `draft`, `published` y `archived` para proyectos; `active` e `inactive` para membresías; `unread`, `read` y `archived` para mensajes.
 
 ### Migraciones D1
 
@@ -145,7 +146,7 @@ La infraestructura de ambas bases se agrupa en `database/`; la estructura y los 
 
 El esquema Drizzle vive en `database/d1/schema.ts`. `pnpm db:generate` crea el SQL versionado y su snapshot en `database/d1/migrations/`; revisa la migración antes de aplicarla. Los triggers de inmutabilidad y pertenencia de la versión publicada se expresan como SQL en la migración porque Drizzle no los representa en el schema TypeScript. Conserva esos triggers al crear cambios posteriores.
 
-El esquema y la migración inicial actuales todavía incluyen `projects.owner_id`. Como D1 no tiene datos, reemplaza ese baseline por el modelo con membresías y sincroniza `schema.ts`, el SQL inicial y el snapshot de Drizzle. Si `0000` ya se aplicó a la D1 remota, vuelve a crear la base vacía y actualiza `D1_DATABASE_ID` en GitHub; si aún no se aplicó, basta con actualizar el baseline antes del primer despliegue. Así se evita una migración `DROP`. Consulta [Base de datos](../database/README.md) para el procedimiento.
+El baseline local inicial usa `projects.created_by` y el modelo de membresías. La D1 remota puede conservar la versión anterior de `0000` con `projects.owner_id`; como no hay datos, recrea la base remota vacía y actualiza `D1_DATABASE_ID` si esa migración ya se aplicó. Si aún no se aplicó, el primer despliegue puede usar el baseline actual sin recrear la base. Así se evita una migración `DROP`. Consulta [Base de datos](../database/README.md) para el procedimiento.
 
 ### Migraciones Supabase
 

@@ -3,8 +3,11 @@ import {
   handleAuthSignIn, handleAuthSignUp, handleAuthSignOut,
   handleAuthPasswordRecovery, handleAuthPasswordUpdate,
 } from '../../server/actions';
+import { AuthError } from '../../domain/auth';
+import { ensureAuthUserIsLocal } from '../../server/local-user';
 import { createSupabaseServerClient } from '../../server/supabase-server';
 
+vi.mock('../../server/local-user', () => ({ ensureAuthUserIsLocal: vi.fn() }));
 vi.mock('../../server/supabase-server', () => ({ createSupabaseServerClient: vi.fn() }));
 const user = { id: 'user-1', email: 'user@example.test', role: 'authenticated', user_metadata: { private: true } };
 const provider = {
@@ -18,6 +21,7 @@ function post(path: string, body: unknown, origin = 'https://app.example.test') 
 }
 beforeEach(() => {
   for (const method of Object.values(provider)) method.mockReset();
+  vi.mocked(ensureAuthUserIsLocal).mockReset().mockResolvedValue('local-user-1');
   provider.getUser.mockResolvedValue({ data: { user }, error: null });
   provider.signOut.mockResolvedValue({ error: null });
   vi.mocked(createSupabaseServerClient).mockReset().mockReturnValue({ client: { auth: provider },
@@ -37,6 +41,7 @@ describe('authentication flows through the internal adapter', () => {
       options: { emailRedirectTo: 'https://app.example.test/auth/confirm/start' },
     });
     expect(await response.json()).toEqual({ confirmationRequired: true, user: { id: user.id, email: user.email } });
+    expect(ensureAuthUserIsLocal).toHaveBeenCalledWith({}, { id: user.id, email: user.email });
     expect(response.headers.get('Set-Cookie')).toContain('managed-by-sdk');
   });
 
@@ -44,9 +49,46 @@ describe('authentication flows through the internal adapter', () => {
     provider.signInWithPassword.mockResolvedValue({ data: { user, session: { access_token: 'never-return-this' } }, error: null });
     const login = await handleAuthSignIn(post('/api/auth/login', { email: user.email, password: 'test-password' }), {});
     expect(await login.json()).toEqual({ authenticated: true, user: { id: user.id, email: user.email } });
+    expect(ensureAuthUserIsLocal).toHaveBeenCalledWith({}, { id: user.id, email: user.email });
     const logout = await handleAuthSignOut(post('/api/auth/logout', {}), {});
     expect(await logout.json()).toEqual({ authenticated: false });
     expect(logout.headers.get('Set-Cookie')).toContain('session=');
+  });
+
+  it('allows signup to finish when local sync fails so a later login can repair the row', async () => {
+    provider.signUp.mockResolvedValue({ data: { user, session: null }, error: null });
+    vi.mocked(ensureAuthUserIsLocal).mockRejectedValueOnce(new AuthError(
+      'local_identity_unavailable', 503, 'No se pudo preparar el acceso privado. Inténtalo de nuevo.',
+    ));
+
+    const response = await handleAuthSignUp(
+      post('/api/auth/signup', { email: user.email, password: 'test-password' }),
+      {},
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ confirmationRequired: true, user: { id: user.id } });
+    expect(response.headers.get('Set-Cookie')).toContain('managed-by-sdk');
+  });
+
+  it('blocks login when the authenticated identity cannot be resolved in D1', async () => {
+    provider.signInWithPassword.mockResolvedValue({
+      data: { user, session: { access_token: 'never-return-this' } }, error: null,
+    });
+    vi.mocked(ensureAuthUserIsLocal).mockRejectedValueOnce(new AuthError(
+      'local_identity_unavailable', 503, 'No se pudo preparar el acceso privado. Inténtalo de nuevo.',
+    ));
+
+    const response = await handleAuthSignIn(
+      post('/api/auth/login', { email: user.email, password: 'test-password' }),
+      {},
+    );
+
+    expect(response.status).toBe(503);
+    const body = JSON.stringify(await response.json());
+    expect(body).not.toContain('database detail');
+    expect(body).not.toContain('never-return-this');
+    expect(response.headers.get('Set-Cookie')).toContain('managed-by-sdk');
   });
 
   it.each([null, { name: 'AuthApiError', code: 'user_not_found', status: 400 }])(

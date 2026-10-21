@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ensureAuthUserIsLocal } from '../../server/local-user';
 import { createSupabaseServerClient } from '../../server/supabase-server';
 import { handleAuthSession } from '../../server/session';
 
+vi.mock('../../server/local-user', () => ({ ensureAuthUserIsLocal: vi.fn() }));
 vi.mock('../../server/supabase-server', () => ({
   createSupabaseServerClient: vi.fn(),
 }));
@@ -19,6 +21,7 @@ describe('GET /api/auth/session handler', () => {
 
   beforeEach(() => {
     getUser.mockReset();
+    vi.mocked(ensureAuthUserIsLocal).mockReset().mockResolvedValue('local-user-1');
     applyAuthResponse.mockClear();
     vi.mocked(createSupabaseServerClient).mockReset();
     vi.mocked(createSupabaseServerClient).mockReturnValue({

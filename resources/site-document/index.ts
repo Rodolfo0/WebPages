@@ -1,4 +1,5 @@
 export {
+  collectSiteDocumentAssetIds,
   createSiteDocumentSchema,
   DEFAULT_THEME_TOKENS,
 } from './domain/site-document';

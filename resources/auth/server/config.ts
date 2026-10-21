@@ -1,6 +1,7 @@
 export interface AuthBindings {
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
+  DB?: D1Database;
 }
 
 export function getSupabaseAuthConfig(bindings: AuthBindings) {

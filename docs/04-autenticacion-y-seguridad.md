@@ -110,7 +110,7 @@ La pantalla de nueva contraseña recibe un `AuthUser` validado. `POST /api/auth/
 
 La autenticación identifica al usuario. La autorización decide qué puede hacer con cada recurso.
 
-Cada consulta privada debe resolver `AuthUser.id` contra `users.auth_subject` y comprobar en el servidor una membresía activa en el proyecto y el permiso requerido. No basta con ocultar botones en React. Las operaciones que requieren esta comprobación incluyen:
+Cada consulta privada debe resolver `AuthUser.id` contra `users.auth_subject` y comprobar en el servidor una membresía activa en el proyecto y el permiso requerido. La condición de permiso se incluye en la misma consulta que lee o cambia el recurso; una comprobación separada no autoriza una escritura posterior. No basta con ocultar botones en React. Las operaciones que requieren esta comprobación incluyen:
 
 - Leer o modificar un proyecto.
 - Subir, eliminar o usar un asset.
@@ -118,9 +118,9 @@ Cada consulta privada debe resolver `AuthUser.id` contra `users.auth_subject` y 
 - Crear una versión publicada.
 - Generar una exportación.
 
-Cada proyecto tiene un único rol de sistema `owner`, asignado a entre una y tres membresías activas. Todos los owners tienen permisos completos; un owner puede agregar o quitar owners si el proyecto conserva al menos uno y nunca supera tres. Los roles personalizados son propios del proyecto y solo pueden usar los permisos asignados por un owner. Publicar, consultar/gestionar mensajes y exportar requieren el permiso correspondiente; los permisos para gestionar roles, owners o eliminar el proyecto quedan reservados al rol `owner`.
+Cada proyecto tiene un único rol de sistema `owner`, asignado a entre una y tres membresías activas. Todos los owners tienen permisos completos; un owner puede agregar o quitar owners si el proyecto conserva al menos uno y nunca supera tres. La creación del proyecto, del rol owner y de la membresía de quien lo crea se ejecuta en un batch atómico de D1. Los roles personalizados son propios del proyecto y solo pueden usar los permisos asignados por un owner. Publicar, consultar/gestionar mensajes y exportar requieren el permiso correspondiente; los permisos para gestionar roles, owners o eliminar el proyecto quedan reservados al rol `owner`.
 
-El acceso público a archivos tiene una excepción acotada: solo se sirve un asset si está referenciado por la versión que el proyecto tiene publicada actualmente. La lectura y administración desde el editor siguen siendo privadas y dependen de la membresía y los permisos; que un cliente conozca un `assetId` o `projectId` no concede acceso.
+El acceso público a archivos tiene una excepción acotada: solo se sirve un asset si pertenece al proyecto y su ID está en la lista de referencias calculada por el servidor para la versión publicada actualmente. Cada bloque declara qué props contienen referencias a assets; el servidor valida el documento antes de guardar esa lista con el snapshot inmutable. La lectura y administración desde el editor siguen siendo privadas y dependen de la membresía y los permisos; que un cliente conozca un `assetId` o `projectId` no concede acceso.
 
 ## Reglas de seguridad
 
