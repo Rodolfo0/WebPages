@@ -1,6 +1,6 @@
 # UI y estilos
 
-Esta es la convención de estilos para el dashboard, el editor y los bloques del sitio. El dashboard y el editor aún no están implementados; las nuevas pantallas deben aplicar estas reglas desde su primera implementación.
+Esta es la convención de estilos para el dashboard, el editor y los bloques del sitio. El dashboard de proyectos aplica esta convención y el editor seguirá la misma cuando se implemente.
 
 ## Aplicación: Mantine para controles, Tailwind para layout
 
@@ -10,7 +10,7 @@ Esta es la convención de estilos para el dashboard, el editor y los bloques del
 - No uses Tailwind para volver a definir el aspecto o los estados de un control Mantine. Evita aplicar sobre esos controles clases de color, fondo, borde, radio, sombra, padding, foco o estado disabled. La tipografía de la interfaz usa los componentes de texto de Mantine; Tailwind puede posicionarlos y dimensionar su contenedor.
 - Coloca cada componente junto al recurso que lo posee, normalmente en `resources/<recurso>/ui/`. Crea componentes en `shared/` solo cuando exista reutilización real entre recursos; la convención visual compartida viene del tema Mantine, no de imports entre recursos.
 
-El proveedor de Mantine pertenece al layout privado de `/app`, no al layout raíz que también pueda alojar rutas públicas. Así el shell y el tema del dashboard/editor no se convierten en dependencias del sitio publicado.
+El proveedor de Mantine pertenece al layout privado de `/app` en `app/app/layout.tsx`, no al layout raíz que también pueda alojar rutas públicas. Así el shell y el tema del dashboard/editor no se convierten en dependencias del sitio publicado.
 
 ## Bloques: estilos propiedad del renderizador
 

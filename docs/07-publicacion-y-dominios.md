@@ -60,9 +60,15 @@ El slug debe:
 
 - Usar minúsculas.
 - Permitir letras, números y guiones.
+- Tener hasta 63 caracteres.
 - Rechazar rutas reservadas.
 - Ser único dentro del espacio de publicación.
 - Mantener redirecciones si cambia y el producto decide soportarlas.
+
+El dashboard normaliza acentos, espacios y puntuación antes de validar. Los
+slugs `admin`, `api`, `app`, `assets`, `auth`, `login`, `public`, `register`,
+`s` y `settings` están reservados. Al cambiar un slug, el servidor actualiza la
+columna indexada del proyecto y el slug de su borrador en una sola operación.
 
 ## Modalidades futuras
 
