@@ -9,6 +9,7 @@ export type AuthErrorCode =
   | 'session_expired'
   | 'session_invalid'
   | 'auth_provider_unavailable'
+  | 'local_identity_unavailable'
   | 'signin_failed'
   | 'email_confirmation_required'
   | 'signup_failed'

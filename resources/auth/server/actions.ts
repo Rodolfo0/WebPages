@@ -3,6 +3,7 @@ import type { AuthAdapter, AuthCredentials } from '../domain/auth';
 import { createAuthAdapter } from './auth';
 import type { AuthBindings } from './config';
 import { authErrorResponse, authJson, isSameOrigin } from './http';
+import { ensureAuthUserIsLocal } from './local-user';
 
 async function readBody(request: Request): Promise<Record<string, unknown> | null> {
   try {
@@ -60,9 +61,19 @@ export async function handleAuthSignUp(request: Request, bindings: AuthBindings)
   if (!isSameOrigin(request)) return invalidOrigin();
   const credentials = await readCredentials(request);
   if (!credentials) return authJson({ error: 'email_and_password_required' }, 400);
-  return perform(request, bindings, async (auth) => authJson(await auth.signUp(
-    credentials, new URL('/auth/confirm/start', request.url).toString(),
-  )));
+  return perform(request, bindings, async (auth) => {
+    const result = await auth.signUp(
+      credentials, new URL('/auth/confirm/start', request.url).toString(),
+    );
+    if (result.user) {
+      try {
+        await ensureAuthUserIsLocal(bindings, result.user);
+      } catch {
+        // A later login or private request repairs the local row before access is granted.
+      }
+    }
+    return authJson(result);
+  });
 }
 
 export async function handleAuthResendSignupConfirmation(request: Request, bindings: AuthBindings) {
@@ -79,9 +90,11 @@ export async function handleAuthSignIn(request: Request, bindings: AuthBindings)
   if (!isSameOrigin(request)) return invalidOrigin();
   const credentials = await readCredentials(request);
   if (!credentials) return authJson({ error: 'email_and_password_required' }, 400);
-  return perform(request, bindings, async (auth) => authJson({
-    authenticated: true, user: await auth.signIn(credentials),
-  }));
+  return perform(request, bindings, async (auth) => {
+    const user = await auth.signIn(credentials);
+    await ensureAuthUserIsLocal(bindings, user);
+    return authJson({ authenticated: true, user });
+  });
 }
 
 export async function handleAuthSignOut(request: Request, bindings: AuthBindings) {

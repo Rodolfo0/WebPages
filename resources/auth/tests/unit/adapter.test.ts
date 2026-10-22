@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthError } from '../../domain/auth';
 import { createAuthAdapter } from '../../server/auth';
+import { ensureAuthUserIsLocal } from '../../server/local-user';
 import { createSupabaseServerClient } from '../../server/supabase-server';
 import { withAuthUser } from '../../server/with-user';
 
+vi.mock('../../server/local-user', () => ({ ensureAuthUserIsLocal: vi.fn() }));
 vi.mock('../../server/supabase-server', () => ({ createSupabaseServerClient: vi.fn() }));
 
 const provider = {
@@ -16,6 +18,7 @@ const user = { id: 'user-123', email: 'user@example.test', user_metadata: { priv
 
 beforeEach(() => {
   for (const method of Object.values(provider)) method.mockReset();
+  vi.mocked(ensureAuthUserIsLocal).mockReset().mockResolvedValue('local-user-1');
   provider.getUser.mockResolvedValue({ data: { user }, error: null });
   provider.signOut.mockResolvedValue({ error: null });
   vi.mocked(createSupabaseServerClient).mockReset().mockReturnValue({
@@ -94,6 +97,7 @@ describe('private HTTP surfaces', () => {
     const handler = vi.fn((identity) => Response.json(identity));
     const response = await withAuthUser(request, {}, handler);
     expect(handler).toHaveBeenCalledWith({ id: user.id, email: user.email });
+    expect(ensureAuthUserIsLocal).toHaveBeenCalledWith({}, { id: user.id, email: user.email });
     expect(await response.json()).toEqual({ id: user.id, email: user.email });
     expect(response.headers.get('set-cookie')).toContain('renewed');
     expect(response.headers.get('cache-control')).toBe('private, no-store');
@@ -104,6 +108,19 @@ describe('private HTTP surfaces', () => {
     const handler = vi.fn();
     const response = await withAuthUser(request, {}, handler);
     expect(response.status).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
+    expect(response.headers.get('set-cookie')).toContain('provider-cookie');
+  });
+
+  it('does not call a private handler when the local identity cannot be resolved', async () => {
+    vi.mocked(ensureAuthUserIsLocal).mockRejectedValueOnce(new AuthError(
+      'local_identity_unavailable', 503, 'No se pudo preparar el acceso privado. Inténtalo de nuevo.',
+    ));
+    const handler = vi.fn();
+    const response = await withAuthUser(request, {}, handler);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: 'local_identity_unavailable' });
     expect(handler).not.toHaveBeenCalled();
     expect(response.headers.get('set-cookie')).toContain('provider-cookie');
   });

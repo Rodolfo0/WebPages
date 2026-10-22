@@ -34,6 +34,9 @@ resources/
       unit/
       integration/
       e2e/
+  projects/
+    domain/                   # reglas de permisos y acceso por proyecto
+    server/                   # consultas de membresía y autorización
   <resource>/
     ...                       # se crea al implementar esa capacidad
 shared/                       # código realmente compartido entre recursos
@@ -46,7 +49,7 @@ Cada carpeta de `resources/<resource>/` puede organizarse por responsabilidad �
 
 Las pruebas viven junto al recurso que posee el comportamiento. Un recorrido E2E entre varios recursos se coloca en el recurso dueño del flujo principal. `shared/` contiene solo código agnóstico usado por más de un recurso; un recurso no debe importar detalles privados de otro.
 
-Actualmente `auth` es el primer recurso migrado. Se añadirán recursos como proyectos, editor o publicación cuando se implemente ese comportamiento.
+`auth` y `projects` son los recursos implementados hasta ahora. Se añadirán recursos como editor o publicación cuando se implemente ese comportamiento.
 
 La autenticación expone `resources/auth/server` como API de servidor y `resources/auth` como contrato de identidad. Las superficies privadas reciben `AuthUser` mediante `withAuthUser()`; las dependencias de Supabase permanecen en la implementación del proveedor. El formulario privado de cambio de contraseña consume ese mismo tipo.
 
@@ -59,7 +62,7 @@ La autenticación expone `resources/auth/server` como API de servidor y `resourc
     /app/projects/:projectId/messages
     /s/:slug
 
-Las rutas privadas deben comprobar sesión y propiedad en el servidor. La ruta pública debe leer solo la versión publicada y no exponer el borrador.
+Las rutas privadas comprueban la sesión con `withAuthUser()` y autorizan cada operación por membresía activa y permiso en el servidor; las lecturas y escrituras incluyen esa regla en la consulta del recurso. Nunca usan `created_by` como concesión de acceso. La ruta pública lee solo la versión publicada, no expone el borrador y solo sirve assets incluidos en la lista de referencias validada y guardada con ese snapshot.
 
 ## Estado del editor
 

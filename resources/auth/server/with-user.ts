@@ -2,6 +2,7 @@ import type { AuthAdapter, AuthUser } from '../domain/auth';
 import { createAuthAdapter } from './auth';
 import type { AuthBindings } from './config';
 import { authErrorResponse } from './http';
+import { ensureAuthUserIsLocal } from './local-user';
 
 // Private HTTP surfaces receive only the internal identity and retain cookies.
 export async function withAuthUser(
@@ -18,6 +19,11 @@ export async function withAuthUser(
   let user: AuthUser;
   try {
     user = await auth.requireUser();
+  } catch (error) {
+    return auth.applyResponse(authErrorResponse(error));
+  }
+  try {
+    await ensureAuthUserIsLocal(bindings, user);
   } catch (error) {
     return auth.applyResponse(authErrorResponse(error));
   }

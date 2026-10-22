@@ -74,6 +74,15 @@ La entrega de correo y el cambio real de contraseña requieren una comprobación
 manual con un proyecto y una bandeja dedicados; no se agregan cuentas ni se
 cambian las credenciales de la cuenta usada por el E2E de login.
 
+La autorización de proyectos comprueba que Supabase se resuelva a un usuario
+local, que los owners puedan acceder a todos los permisos y que un rol
+personalizado solo reciba permisos explícitos y delegables. Las mutaciones
+comprueban permiso y membresía en la consulta que modifica el recurso. La
+creación del proyecto, el rol owner y la membresía inicial es atómica. La
+migración D1 comprueba el máximo de tres owners, la conservación del último y
+que la publicación activa solo exponga assets incluidos en su lista validada de
+referencias; un ID que aparezca en texto ordinario no cuenta como referencia.
+
 - Validación de SiteDocument.
 - Valores por defecto de cada bloque.
 - Rechazo de tipos y propiedades desconocidas.
