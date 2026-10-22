@@ -35,6 +35,7 @@ export default defineConfig(async ({ mode }) => {
             database_name: "site-creator-d1",
             database_id: databaseId || LOCAL_D1_DATABASE_ID,
             migrations_dir: "database/d1/migrations",
+            remote: process.env.D1_REMOTE === "true",
           },
         ]
       : [],
