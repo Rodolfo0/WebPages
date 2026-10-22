@@ -1,5 +1,7 @@
 import type { AuthUser } from '../../auth';
 import { projectAccessDenied, ProjectAccessError } from '../domain/access';
+import { createPortfolioTemplate } from '../domain/portfolio-template';
+import { parseCreateProjectInput, ProjectInputError } from '../domain/project';
 
 export class ProjectCreationError extends Error {
   readonly code = 'project_creation_unavailable';
@@ -21,18 +23,20 @@ export class ProjectSlugConflictError extends Error {
   }
 }
 
-export type InitialProject = {
+export type NewProject = {
   name: string;
-  slug: string;
-  draftDocumentJson: string;
+  slug?: string;
 };
 
 /** Creates the project, its owner role, and the creator's owner membership atomically. */
 export async function createProjectWithOwner(
   database: D1Database,
   authUser: AuthUser,
-  project: InitialProject,
+  project: NewProject,
 ) {
+  const details = parseCreateProjectInput(project);
+  const draftDocumentJson = JSON.stringify(createPortfolioTemplate(details.name, details.slug));
+
   try {
     const localUser = await database
       .prepare('SELECT id FROM users WHERE auth_subject = ? LIMIT 1')
@@ -49,7 +53,7 @@ export async function createProjectWithOwner(
         VALUES (?, ?, ?, ?, 'draft', ?)
         ON CONFLICT(slug) DO NOTHING
         RETURNING id
-      `).bind(projectId, localUser.id, project.name, project.slug, project.draftDocumentJson),
+      `).bind(projectId, localUser.id, details.name, details.slug, draftDocumentJson),
       database.prepare(`
         INSERT INTO project_roles (id, project_id, name, kind)
         SELECT ?, ?, 'Owner', 'system_owner'
@@ -69,7 +73,11 @@ export async function createProjectWithOwner(
 
     return { projectId, userId: localUser.id, ownerRoleId };
   } catch (error) {
-    if (error instanceof ProjectAccessError || error instanceof ProjectSlugConflictError) throw error;
+    if (
+      error instanceof ProjectAccessError
+      || error instanceof ProjectSlugConflictError
+      || error instanceof ProjectInputError
+    ) throw error;
     throw new ProjectCreationError();
   }
 }

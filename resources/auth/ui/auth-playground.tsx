@@ -270,6 +270,12 @@ export default function AuthPlayground() {
                     ID: {user.id}
                   </p>
                 </div>
+                <a
+                  href="/app/projects"
+                  className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  Administrar proyectos
+                </a>
                 <button
                   type="button"
                   onClick={signOut}
