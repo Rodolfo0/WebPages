@@ -21,6 +21,7 @@
 # misc
 .DS_Store
 *.pem
+*.tsbuildinfo
 
 # debug
 npm-debug.log*
@@ -47,3 +48,7 @@ next-env.d.ts
 # Local Dev Env Sync
 /vars.dev.json
 /secrets.dev.json
+
+# local AI assistant prompts and context
+.continue
+.continue/
