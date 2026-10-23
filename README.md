@@ -26,6 +26,31 @@ SUPABASE_PUBLISHABLE_KEY=<clave-publicable>
 
 Usa la clave publicable del proyecto; la aplicación no requiere una clave `service_role`. Habilita Email/Password en **Supabase → Authentication → Providers → Email**. Si la confirmación de correo está habilitada, confirma la cuenta antes de iniciar sesión.
 
+Para desplegar a Cloudflare, configura en **GitHub → Settings → Environments →
+production**:
+
+- La **Variable** `VARS_JSON`, con el JSON de las variables públicas del
+  Worker. Debe incluir al menos `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`, por
+  ejemplo:
+
+  ```json
+  {"SUPABASE_URL":"https://<referencia>.supabase.co","SUPABASE_PUBLISHABLE_KEY":"sb_publishable_..."}
+  ```
+
+- El **Secret** `SECRETS_JSON`, con un objeto JSON de secretos runtime,
+  por ejemplo `{"PAYMENTS_API_KEY":"<secreto>"}`. Usa `{}` si no necesitas
+  secretos runtime.
+
+El build incluye `VARS_JSON` en la configuración generada por Wrangler y
+el despliegue pasa `SECRETS_JSON` a Wrangler como secretos. No se imprimen
+sus valores. Mantén `SUPABASE_ACCESS_TOKEN` y `SUPABASE_DB_PASSWORD` como secretos
+independientes: solo los usa el paso de migraciones, no el Worker.
+
+`VARS_JSON` es la fuente de verdad de las variables públicas del Worker;
+las variables del Dashboard que falten en ese objeto pueden ser reemplazadas al
+desplegar. Los secretos ausentes de `SECRETS_JSON` se conservan en
+Cloudflare y deben eliminarse explícitamente cuando quieras retirarlos.
+
 ### Migración de Supabase
 
 El formulario de registro consulta si el correo ya existe mediante una función de Supabase. La Data API debe estar habilitada y exponer el esquema `public`. Para habilitar ese flujo, instala el CLI de Supabase si no lo tienes y aplica la migración al proyecto de desarrollo:
