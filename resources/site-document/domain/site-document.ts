@@ -19,6 +19,14 @@ const DEFAULT_THEME_VALUES = {
   spacing: 'comfortable',
 } as const;
 
+
+/** Any JSON value. It is the only content a block instance can persist. */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+/** Validated props of a block instance, as stored inside the document. */
+export type BlockProps = Record<string, JsonValue>;
+
+
 const hexColorSchema = z.string().regex(HEX_COLOR_PATTERN, {
   message: 'Use un color hexadecimal de 3 o 6 dígitos.',
 });
@@ -57,7 +65,33 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ]),
 );
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return true;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+
+  if (typeof value === 'object') {
+    const prototype = Object.getPrototypeOf(value);
+    return (
+      (prototype === Object.prototype || prototype === null) &&
+      Object.values(value).every(isJsonValue)
+    );
+  }
+
+  return false;
+}
+
+function isJsonObject(value: unknown): value is Record<string, JsonValue> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && isJsonValue(value);
+}
 
 const jsonObjectSchema = z
   .custom<Record<string, JsonValue>>(isJsonObject, {
@@ -88,34 +122,6 @@ export type BlockSchemaDefinition = {
 };
 
 export type BlockSchemaRegistry = Readonly<Record<string, BlockSchemaDefinition>>;
-
-function isJsonValue(value: unknown): value is JsonValue {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
-    return true;
-  }
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-
-  if (typeof value === 'object') {
-    const prototype = Object.getPrototypeOf(value);
-    return (
-      (prototype === Object.prototype || prototype === null) &&
-      Object.values(value).every(isJsonValue)
-    );
-  }
-
-  return false;
-}
-
-function isJsonObject(value: unknown): value is Record<string, JsonValue> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) && isJsonValue(value);
-}
 
 function prepareBlockRegistry(registry: BlockSchemaRegistry) {
   const prepared = new Map<string, BlockSchemaDefinition>();
