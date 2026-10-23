@@ -13,14 +13,68 @@ const { d1, r2 } = hostingConfig;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
+type WorkerVarValue = string | number | boolean | object;
+
+function parseWorkerVars(json: string | undefined): Record<string, WorkerVarValue> {
+  if (!json?.trim()) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json) as unknown;
+  } catch {
+    throw new Error("VARS_JSON must contain a valid JSON object.");
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("VARS_JSON must contain a valid JSON object.");
+  }
+
+  const vars: Record<string, WorkerVarValue> = {};
+  for (const [name, value] of Object.entries(parsed)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      throw new Error(`VARS_JSON contains an invalid binding name: ${name}.`);
+    }
+    if (value === null) {
+      throw new Error(`VARS_JSON cannot set ${name} to null.`);
+    }
+    vars[name] = value as WorkerVarValue;
+  }
+
+  return vars;
+}
+
 export default defineConfig(async ({ mode }) => {
   const fileEnv = loadEnv(mode, process.cwd(), "");
   const databaseId = process.env.D1_DATABASE_ID || fileEnv.D1_DATABASE_ID;
+  const supabaseUrl = (process.env.SUPABASE_URL || fileEnv.SUPABASE_URL)?.trim();
+  const supabasePublishableKey = (
+    process.env.SUPABASE_PUBLISHABLE_KEY || fileEnv.SUPABASE_PUBLISHABLE_KEY
+  )?.trim();
 
-  if (d1 && mode === "production" && !databaseId) {
-    throw new Error(
-      "D1_DATABASE_ID is required for production builds. Set it in the GitHub Actions production environment or in .env.production.local.",
-    );
+  const workerVars = parseWorkerVars(process.env.VARS_JSON || fileEnv.VARS_JSON);
+  if (!workerVars.SUPABASE_URL && supabaseUrl) workerVars.SUPABASE_URL = supabaseUrl;
+  if (!workerVars.SUPABASE_PUBLISHABLE_KEY && supabasePublishableKey) {
+    workerVars.SUPABASE_PUBLISHABLE_KEY = supabasePublishableKey;
+  }
+
+  if (d1 && mode === "production") {
+    const missing: string[] = [];
+    if (!databaseId) missing.push("D1_DATABASE_ID");
+    if (typeof workerVars.SUPABASE_URL !== "string" || !workerVars.SUPABASE_URL.trim()) {
+      missing.push("SUPABASE_URL in VARS_JSON");
+    }
+    if (
+      typeof workerVars.SUPABASE_PUBLISHABLE_KEY !== "string"
+      || !workerVars.SUPABASE_PUBLISHABLE_KEY.trim()
+    ) {
+      missing.push("SUPABASE_PUBLISHABLE_KEY in VARS_JSON");
+    }
+
+    if (missing.length > 0) {
+      throw new Error(
+        `Production builds require ${missing.join(", ")}. Set them in the GitHub Actions production environment or in .env.production.local.`,
+      );
+    }
   }
 
   const localBindingConfig = {
@@ -28,6 +82,7 @@ export default defineConfig(async ({ mode }) => {
     compatibility_date: "2026-10-13",
     main: "vinext/server/app-router-entry",
     compatibility_flags: ["nodejs_compat"],
+    vars: workerVars,
     d1_databases: d1
       ? [
           {
@@ -50,7 +105,7 @@ export default defineConfig(async ({ mode }) => {
   };
 
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
-  // settings; application environment belongs in ignored `.env*` files.
+  // settings; local application values belong in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
   process.env.WRANGLER_LOG_PATH ??= ".wrangler/logs";
   process.env.MINIFLARE_REGISTRY_PATH ??= ".wrangler/registry";

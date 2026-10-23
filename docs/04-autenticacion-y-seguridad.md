@@ -67,8 +67,10 @@ En **GitHub → Settings → Environments → production**, configura:
 | Secret | `SUPABASE_ACCESS_TOKEN` | Token personal de Supabase, limitado al proyecto de destino. Para `supabase --workdir database link`, necesita lectura de Project Settings, API Keys y API Key Secrets. |
 | Secret | `SUPABASE_DB_PASSWORD` | Contraseña de PostgreSQL del proyecto; no es la contraseña de una cuenta de la aplicación ni una API key. |
 | Variable | `SUPABASE_PROJECT_REF` | Referencia del proyecto, el identificador en `https://supabase.com/dashboard/project/<referencia>`. |
+| Variable | `VARS_JSON` | Objeto JSON con las variables no secretas del Worker, incluidas `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. |
+| Secret | `SECRETS_JSON` | Objeto JSON de secretos runtime del Worker; usa `{}` si no necesita secretos adicionales. |
 
-Estos valores solo se usan en el paso de migraciones de GitHub Actions. El Worker conserva `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`, sin secretos administrativos adicionales. La referencia del workflow debe corresponder al proyecto de esas variables.
+`VARS_JSON` debe ser un objeto JSON, por ejemplo `{"SUPABASE_URL":"https://<referencia>.supabase.co","SUPABASE_PUBLISHABLE_KEY":"sb_publishable_..."}`. El build valida las dos claves requeridas y las incluye en `vars` de la configuración generada por Wrangler. Ese JSON es la fuente de verdad para las variables públicas: las variables del Dashboard que no aparezcan allí pueden ser reemplazadas durante el despliegue. `SECRETS_JSON` debe ser un objeto JSON cuyas claves son nombres de bindings y cuyos valores son strings; GitHub Actions lo guarda temporalmente en el runner y Wrangler lo sube con el despliegue. Los secretos omitidos del JSON se conservan en Cloudflare; bórralos explícitamente cuando quieras retirarlos. Los nombres no pueden repetirse entre ambos objetos. `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` y `SUPABASE_PROJECT_REF` siguen usándose solo para migraciones; no agregues credenciales administrativas ni una clave `service_role` a las variables públicas. La referencia del workflow debe corresponder al proyecto indicado en `VARS_JSON`.
 
 Para aplicar las migraciones al proyecto gestionado usado en desarrollo o pruebas, instala el CLI de Supabase y ejecuta desde la raíz del repositorio:
 

@@ -25,6 +25,12 @@ En GitHub, crea el Environment `production` y configura:
   D1, limitado a la cuenta del proyecto.
 - Secret `CLOUDFLARE_ACCOUNT_ID`, con el ID de esa cuenta.
 - Variable `D1_DATABASE_ID`, con el UUID de `site-creator-d1`.
+- Variable `VARS_JSON`, con un objeto JSON que incluya
+  `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`, además de cualquier otra variable
+  pública requerida por el Worker.
+- Secret `SECRETS_JSON`, con un objeto JSON de secretos runtime; usa `{}`
+  si el Worker no necesita secretos adicionales. El workflow los pasa a Wrangler
+  durante el despliegue sin mostrarlos en los logs.
 
 No guardes el token en el repositorio. El token necesita permisos Workers Edit
 para publicar el Worker y D1 Edit para las migraciones, ambos limitados a la
