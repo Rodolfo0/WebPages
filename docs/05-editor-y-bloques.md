@@ -17,21 +17,37 @@ Cada bloque debe tener una composición terminada. El usuario cambia el contenid
 
 ## Contrato de un bloque
 
-    type BlockDefinition = {
+El contrato vive en `resources/blocks`. `BlockDefinition<P>` describe un tipo de bloque y su renderizador React:
+
+    type BlockDefinition<P> = {
       type: string
       label: string
       description: string
-      defaultProps: Record<string, unknown>
-      propsSchema: unknown
-      reactComponent: unknown
-      astroComponentPath: string
+      propsSchema: ZodType<P>
+      defaultProps: P
+      reactComponent: ComponentType<BlockRenderProps<P>>
+      assetIdsFromProps?: (props: P) => readonly string[]
     }
 
-La definición centraliza el nombre del bloque, sus valores iniciales, validación y renderizadores. El editor usa reactComponent; el exportador Astro usa astroComponentPath.
+La definición centraliza el nombre del bloque, sus valores iniciales, su validación y su renderizador. `defineBlock()` comprueba en tiempo de compilación que `reactComponent` acepta exactamente las props que produce `propsSchema`.
 
-El registro entrega `propsSchema` y `defaultProps` a `createSiteDocumentSchema` desde `resources/site-document`. El schema valida los valores iniciales al crear el validador, los aplica cuando faltan props en una instancia y rechaza props adicionales. Los consumidores deben validar el documento completo con el registro, para que también se rechacen tipos de bloque desconocidos.
+Un renderizador recibe dos cosas separadas: su propio contenido validado en `props` y un contexto de render con `blockId`, `theme` y un `onAction` opcional para el editor. La separación evita que las props del bloque tengan que admitir callbacks dentro de su tipo JSON.
+
+El registro entrega `propsSchema` y `defaultProps` a `createSiteDocumentSchema` desde `resources/site-document`. `toBlockSchemaRegistry()` proyecta el registro a esa forma, de modo que el documento se valide con la misma fuente que usa el renderizador. El schema valida los valores iniciales al crear el validador, los aplica cuando faltan props en una instancia y rechaza props adicionales. Los consumidores deben validar el documento completo con el registro, para que también se rechacen tipos de bloque desconocidos: `requireBlock()` lanza `UnknownBlockTypeError` si el tipo no existe.
 
 Cada bloque es dueño de sus estilos. Su renderizador React debe conservar la misma apariencia en la vista pública y en el canvas, sin importar estilos del dashboard o depender de Mantine. Consulta [UI y estilos](12-ui-y-estilos.md) para la convención de aislamiento y el uso de tokens del tema.
+
+### Renderizador Astro posterior al MVP
+
+`BlockDefinition` no incluye hoy un renderizador Astro. El MVP solo renderiza React, así que la exportación añade su renderizador como una propiedad nueva de la misma definición cuando llegue [la generación de Astro](08-generacion-astro.md), sin modificar `SiteDocument`, el editor ni el registro. `resources/blocks/index.ts` es el punto de entrada que consumirán el editor, la publicación y el exportador.
+
+## Catálogo registrado
+
+`createPortfolioTemplate` emite `props: {}` para los ocho tipos de la plantilla: `hero`, `about`, `experience`, `projects`, `skills`, `testimonials`, `contact` y `footer`.
+
+Esos tipos aún no están registrados en `resources/blocks`; los implementa la issue de bloques iniciales de portafolio. Mientras tanto, ningún documento creado desde la plantilla puede validarse con `createSiteDocumentSchema`, porque cada tipo debe existir en el registro. No es un error actual porque la creación de proyectos todavía no valida el borrador, pero la primera validación previa a publicar debe ejecutarse con el registro completo.
+
+
 
 ## Propiedades permitidas
 

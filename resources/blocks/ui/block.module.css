@@ -1,0 +1,56 @@
+.root {
+  box-sizing: border-box;
+  width: 100%;
+  padding-block: 3rem;
+  padding-inline: clamp(1rem, 5vw, 3rem);
+  background: var(--block-bg);
+  color: var(--block-text);
+  font-family: var(--block-font-body);
+  font-size: var(--block-font-size);
+  line-height: 1.6;
+}
+
+.inner {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+.inner > * {
+  margin: 0;
+}
+
+.inner > * + * {
+  margin-block-start: 0.75rem;
+}
+
+.root[data-block-hidden='true'] {
+  display: none;
+}
+
+.heading {
+  font-family: var(--block-font-heading);
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.text {
+  color: inherit;
+}
+
+.accent {
+  color: var(--block-accent);
+}
+
+:where(.root a) {
+  color: var(--block-accent);
+  text-underline-offset: 0.2em;
+}
+
+:where(.root a):focus-visible {
+  outline: 2px solid var(--block-accent);
+  outline-offset: 2px;
+}
+
