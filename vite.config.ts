@@ -13,7 +13,29 @@ const { d1, r2 } = hostingConfig;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
-type WorkerVarValue = string | number | boolean | object;
+// Values Wrangler accepts inside a `vars` block. It mirrors Cloudflare's `Json` type instead of
+// using `object`, which would also admit values such as `Date`, `Map` or class instances that
+// `JSON.stringify` silently rewrites or drops.
+type WorkerVarValue =
+  | string
+  | number
+  | boolean
+  | WorkerVarValue[]
+  | { [key: string]: WorkerVarValue };
+
+function isWorkerVarValue(value: unknown): value is WorkerVarValue {
+  if (typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isWorkerVarValue);
+  if (typeof value === "object" && value !== null) {
+    const prototype = Object.getPrototypeOf(value);
+    return (
+      (prototype === Object.prototype || prototype === null) &&
+      Object.values(value).every(isWorkerVarValue)
+    );
+  }
+  return false;
+}
 
 function parseWorkerVars(json: string | undefined): Record<string, WorkerVarValue> {
   if (!json?.trim()) return {};
@@ -34,10 +56,14 @@ function parseWorkerVars(json: string | undefined): Record<string, WorkerVarValu
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
       throw new Error(`VARS_JSON contains an invalid binding name: ${name}.`);
     }
+    // `null` is valid JSON but Wrangler rejects it as a binding value.
     if (value === null) {
       throw new Error(`VARS_JSON cannot set ${name} to null.`);
     }
-    vars[name] = value as WorkerVarValue;
+    if (!isWorkerVarValue(value)) {
+      throw new Error(`VARS_JSON cannot set ${name} to an unsupported value.`);
+    }
+    vars[name] = value;
   }
 
   return vars;
