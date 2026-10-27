@@ -131,6 +131,10 @@ export default function ProjectsDashboard() {
     setFormOpened(true);
   }
 
+  function openEditor(project: ProjectSummary) {
+    router.push(`/app/projects/${encodeURIComponent(project.id)}/editor`);
+  }
+
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (formBusy) return;
@@ -279,6 +283,11 @@ export default function ProjectsDashboard() {
 
                   <Group justify="space-between" mt="xs">
                     <Group gap="xs">
+                      {project.hasDraft && (
+                        <Button onClick={() => openEditor(project)}>
+                          {project.canEdit ? 'Abrir editor' : 'Ver borrador'}
+                        </Button>
+                      )}
                       {project.canEdit && (
                         <Button variant="default" onClick={() => openEditForm(project)}>
                           Editar

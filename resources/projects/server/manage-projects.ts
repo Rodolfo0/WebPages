@@ -7,10 +7,14 @@ import {
   projects,
   users,
 } from '../../../database/d1/schema';
+import { portfolioBlockRegistry, toBlockSchemaRegistry } from '../../blocks';
 import type { AuthUser } from '../../auth';
+import { createSiteDocumentSchema } from '../../site-document';
 import { projectAccessDenied, ProjectAccessError } from '../domain/access';
 import { ProjectSlugConflictError } from './create-project';
 import { projectPermissionPredicate } from './access';
+
+const projectDocumentSchema = createSiteDocumentSchema(toBlockSchemaRegistry(portfolioBlockRegistry));
 
 export class ProjectManagementError extends Error {
   readonly code = 'project_management_unavailable';
@@ -87,6 +91,60 @@ export async function listProjects(database: D1Database, authUser: AuthUser) {
       canDelete: project.canDelete === 1,
     }));
   } catch {
+    throw new ProjectManagementError();
+  }
+}
+
+/**
+ * Reads a project's validated draft for the editor. The project:read permission is checked in
+ * the same query as the draft read; canEdit is returned as UI state, while every later mutation
+ * must still enforce project:update on the server.
+ */
+export async function getProjectDraft(
+  database: D1Database,
+  authUser: AuthUser,
+  projectId: string,
+) {
+  if (typeof projectId !== 'string' || !projectId.trim()) throw projectAccessDenied();
+
+  try {
+    const db = createDb(database);
+    const [row] = await db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        slug: projects.slug,
+        status: projects.status,
+        updatedAt: projects.updatedAt,
+        draftDocumentJson: projects.draftDocumentJson,
+        canEdit: sql<number>`CASE WHEN ${projectPermissionPredicate(
+          authUser.id,
+          projectId,
+          'project:update',
+        )} THEN 1 ELSE 0 END`,
+      })
+      .from(projects)
+      .where(and(
+        eq(projects.id, projectId),
+        projectPermissionPredicate(authUser.id, projectId, 'project:read'),
+      ))
+      .limit(1);
+
+    if (!row) throw projectAccessDenied();
+
+    return {
+      project: {
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        status: row.status,
+        updatedAt: row.updatedAt,
+        canEdit: row.canEdit === 1,
+      },
+      draftDocument: projectDocumentSchema.parse(JSON.parse(row.draftDocumentJson) as unknown),
+    };
+  } catch (error) {
+    if (error instanceof ProjectAccessError) throw error;
     throw new ProjectManagementError();
   }
 }

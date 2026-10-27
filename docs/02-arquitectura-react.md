@@ -49,7 +49,7 @@ Cada carpeta de `resources/<resource>/` puede organizarse por responsabilidad �
 
 Las pruebas viven junto al recurso que posee el comportamiento. Un recorrido E2E entre varios recursos se coloca en el recurso dueño del flujo principal. `shared/` contiene solo código agnóstico usado por más de un recurso; un recurso no debe importar detalles privados de otro.
 
-`auth` y `projects` son los recursos implementados hasta ahora. Se añadirán recursos como editor o publicación cuando se implemente ese comportamiento.
+`auth`, `projects`, `site-document`, `blocks` y `editor` son los recursos implementados hasta ahora. El recurso `editor` posee la interfaz del canvas, la lista lateral, el catálogo y la selección local; obtiene el borrador validado desde `projects/server`. El guardado del borrador se añade en su issue correspondiente. La publicación seguirá siendo un recurso separado.
 
 La autenticación expone `resources/auth/server` como API de servidor y `resources/auth` como contrato de identidad. Las superficies privadas reciben `AuthUser` mediante `withAuthUser()`; las dependencias de Supabase permanecen en la implementación del proveedor. El formulario privado de cambio de contraseña consume ese mismo tipo.
 
