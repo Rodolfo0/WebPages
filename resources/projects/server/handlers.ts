@@ -8,7 +8,13 @@ import {
   ProjectInputError,
 } from '../domain/project';
 import { ProjectCreationError, ProjectSlugConflictError, createProjectWithOwner } from './create-project';
-import { deleteProject, listProjects, ProjectManagementError, updateProject } from './manage-projects';
+import {
+  deleteProject,
+  getProjectDraft,
+  listProjects,
+  ProjectManagementError,
+  updateProject,
+} from './manage-projects';
 
 type ProjectBindings = AuthBindings & { DB?: D1Database };
 
@@ -77,6 +83,21 @@ export async function handleListProjects(request: Request, bindings: ProjectBind
     try {
       const projects = await listProjects(requireDatabase(bindings), user);
       return projectJson({ projects });
+    } catch (error) {
+      return projectErrorResponse(error);
+    }
+  });
+}
+
+export async function handleGetProject(
+  request: Request,
+  bindings: ProjectBindings,
+  projectId: string,
+) {
+  return withAuthUser(request, bindings, async (user: AuthUser) => {
+    try {
+      const result = await getProjectDraft(requireDatabase(bindings), user, projectId);
+      return projectJson(result);
     } catch (error) {
       return projectErrorResponse(error);
     }

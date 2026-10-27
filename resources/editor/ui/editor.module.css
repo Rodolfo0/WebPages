@@ -1,0 +1,68 @@
+.canvasSurface {
+  background: var(--mantine-color-gray-1);
+}
+
+.canvasViewport {
+  max-height: calc(100dvh - 14rem);
+  min-height: 32rem;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.pageCanvas {
+  margin-inline: auto;
+  min-height: 32rem;
+  max-width: 72rem;
+  background: var(--mantine-color-white);
+  box-shadow: var(--mantine-shadow-sm);
+}
+
+.catalogResults {
+  max-height: min(60vh, 36rem);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.catalogResults > * {
+  flex: 0 0 auto;
+}
+
+.blockFrame {
+  position: relative;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  cursor: pointer;
+}
+
+.blockFrame:hover {
+  outline-color: var(--mantine-color-indigo-3);
+}
+
+.blockFrame[data-selected='true'] {
+  z-index: 1;
+  outline-color: var(--mantine-color-indigo-6);
+}
+
+.blockFrame:focus-visible {
+  z-index: 2;
+  outline: 3px solid var(--mantine-color-blue-6);
+  outline-offset: -3px;
+}
+
+.renderedBlock {
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 48rem) {
+  .canvasViewport {
+    max-height: none;
+    min-height: 20rem;
+    padding: 0.5rem;
+  }
+
+  .pageCanvas {
+    min-height: 20rem;
+  }
+}

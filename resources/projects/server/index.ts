@@ -11,6 +11,7 @@ export {
 } from './create-project';
 export {
   deleteProject,
+  getProjectDraft,
   listProjects,
   ProjectManagementError,
   updateProject,
@@ -18,6 +19,7 @@ export {
 export {
   handleCreateProject,
   handleDeleteProject,
+  handleGetProject,
   handleListProjects,
   handleUpdateProject,
 } from './handlers';

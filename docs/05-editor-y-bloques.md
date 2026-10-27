@@ -86,6 +86,10 @@ No se permitirá CSS arbitrario, HTML personalizado ni JavaScript introducido po
 
 El arrastre no puede ser la única forma de ordenar. Los botones deben tener nombres accesibles y el bloque seleccionado debe ser visible con un estado de foco claro.
 
+El catálogo del canvas se deriva de `portfolioBlockRegistry`. Al añadir un bloque, el editor clona sus `defaultProps`, crea un id nuevo, lo agrega al final de la página y valida el `SiteDocument` completo con el mismo registro. La selección y los cambios del documento permanecen en el estado local del editor hasta que se implemente el guardado.
+
+En escritorio, el canvas ocupa el área principal a la izquierda y la lista de secciones queda a la derecha. El catálogo se abre en un modal al pulsar «Agregar sección» y se cierra después de agregar un bloque.
+
 ## Estado de guardado
 
 El editor debe mostrar si el borrador está guardado, guardando o tiene un error. Si una petición falla, el contenido local temporal no debe desaparecer sin avisar al usuario.
