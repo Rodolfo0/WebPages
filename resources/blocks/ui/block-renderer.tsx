@@ -49,6 +49,11 @@ export type BlockSectionProps = {
   /** Current section alignment, applied with logical text alignment. */
   align: BlockAlignment;
   theme: ThemeTokens;
+  /**
+   * Optional in-page anchor rendered as the section id, so a sibling block can link to `#anchor`.
+   * Unset means the section is not addressable, and the id attribute is omitted.
+   */
+  anchor?: string;
   /** Accessible name used by `aria-labelledby`; it points to a visible or hidden heading. */
   headingId: string;
   /** Visible text of the heading. It doubles as the accessible name of the section. */
@@ -68,6 +73,7 @@ export type BlockSectionProps = {
 export function BlockSection({
   align,
   theme,
+  anchor,
   headingId,
   heading,
   headingLevel,
@@ -76,6 +82,7 @@ export function BlockSection({
 }: BlockSectionProps) {
   return (
     <section
+      id={anchor || undefined}
       aria-labelledby={headingId}
       className={styles.root}
       data-block-align={align}

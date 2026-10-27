@@ -20,3 +20,15 @@ export type {
 export { BlockHeading, BlockSection, BLOCK_RENDER_PROP_NAMES } from './ui/block-renderer';
 export { blockThemeStyle } from './ui/block-theme-style';
 export { blockStyles } from './ui/block-renderer';
+export {
+  PORTFOLIO_BLOCKS,
+  portfolioBlockRegistry,
+  heroBlock,
+  aboutBlock,
+  experienceBlock,
+  projectsBlock,
+  skillsBlock,
+  testimonialsBlock,
+  contactBlock,
+  footerBlock,
+} from './ui/portfolio';

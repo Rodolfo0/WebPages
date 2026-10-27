@@ -34,7 +34,7 @@ La copia `.env.local` sirve de plantilla; se deben reemplazar los valores con lo
 
 Para la prueba de runtime, el control plane de Cloudflare debe inyectar `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` como variables del Worker; en local se pueden cargar desde `.env.local`. En el proyecto Supabase de prueba también se deben habilitar email/contraseña, configurar el callback local y de preview, y usar una bandeja de correo controlada para confirmación y recuperación.
 
-Con las dependencias instaladas y las variables configuradas, ejecutar `pnpm dev` y abrir `http://localhost:3000` (puerto predeterminado de Vinext). La pantalla ofrece registro, login y logout; al entrar, consulta la sesión con `GET /api/auth/session`.
+Con las dependencias instaladas y las variables configuradas, ejecutar `pnpm dev` y abrir `http://localhost:5173` (puerto fijado para desarrollo). La pantalla ofrece registro, login y logout; al entrar, consulta la sesión con `GET /api/auth/session`.
 
 El callback PKCE original permanece en `GET /auth/callback` para enlaces que ya fueron enviados. Si la plantilla aún usa `{{ .ConfirmationURL }}`, `/auth/confirm/start` reenvía el `code` al callback original; ese flujo conserva la limitación de abrirse en el navegador donde se inició el registro. Los correos nuevos deben usar `TokenHash` y una confirmación explícita para crear la sesión en el navegador que abre el correo, aunque sea otro dispositivo.
 
@@ -46,7 +46,7 @@ En **Authentication → Email Templates → Confirm signup**, sustituir el enlac
 
 `signUp()` y `resend()` envían `emailRedirectTo` hacia `/auth/confirm/start`; ese endpoint prepara una confirmación con un paso explícito y no consume el token al cargar la página. El formulario envía el `token_hash` a `POST /auth/confirm/verify`, donde `auth.verifyOtp({ token_hash, type: 'email' })` valida el email y guarda las cookies de sesión en el navegador actual. La protección CSRF usa un estado breve asociado a una cookie del mismo navegador. No se debe verificar el token directamente en un `GET`, porque algunos lectores de correo inspeccionan enlaces automáticamente.
 
-En **Authentication → URL Configuration → Redirect URLs**, permitir `/auth/confirm/start` para cada origen usado al registrarse, por ejemplo `http://localhost:3000/auth/confirm/start` y `http://localhost:5180/auth/confirm/start`. La aplicación incluye el origen de la petición al llamar a Supabase. Un correo ya enviado conserva la URL y el flujo PKCE anteriores; puede requerir el navegador original o se puede solicitar un correo nuevo después de actualizar la plantilla. El proyecto Supabase debe tener Email habilitado.
+En **Authentication → URL Configuration → Redirect URLs**, permitir `/auth/confirm/start` para cada origen usado al registrarse, por ejemplo `http://localhost:5173/auth/confirm/start` y `http://localhost:5180/auth/confirm/start`. La aplicación incluye el origen de la petición al llamar a Supabase. Un correo ya enviado conserva la URL y el flujo PKCE anteriores; puede requerir el navegador original o se puede solicitar un correo nuevo después de actualizar la plantilla. El proyecto Supabase debe tener Email habilitado.
 
 ## Compatibilidad y límites
 

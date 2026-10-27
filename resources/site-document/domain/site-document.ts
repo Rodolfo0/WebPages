@@ -268,6 +268,15 @@ export type SiteDocumentSchema = ReturnType<typeof createSiteDocumentSchema>;
 export type SiteDocument = z.output<SiteDocumentSchema>;
 export type SiteDocumentInput = z.input<SiteDocumentSchema>;
 
+/**
+ * Collects the asset ids a document references, so only those may be served publicly.
+ *
+ * The selector is read from `registry` and not from the registry `createSiteDocumentSchema`
+ * prepares internally. `prepareBlockRegistry` keeps only `propsSchema` and `defaultProps`, so it
+ * drops `assetIdsFromProps`; reading the selector from there would silently return no ids and make
+ * every published asset private. Fixing `prepareBlockRegistry` to keep the selector is tracked
+ * separately; until then this function must stay on the caller's registry.
+ */
 export function collectSiteDocumentAssetIds(
   registry: BlockSchemaRegistry,
   input: unknown,

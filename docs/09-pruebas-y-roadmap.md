@@ -54,8 +54,8 @@ varios recursos se guarda junto al recurso dueño del flujo principal.
    añade su email y contraseña a `SUPABASE_E2E_EMAIL` y
    `SUPABASE_E2E_PASSWORD` en `.env.test.local`.
 4. Ejecuta los comandos por separado. Playwright administra el Worker de prueba
-   en el puerto `5180`. Puede convivir con `pnpm dev`, que Vinext ejecuta en
-   el puerto `3000` por defecto.
+   en el puerto `5180`. Puede convivir con `pnpm dev`, que usa el puerto fijo
+   `5173` para desarrollo.
    Si Playwright no encuentra Chromium en el equipo, instala el navegador con
    `pnpm exec playwright install chromium`.
 

@@ -63,11 +63,11 @@ supabase --workdir database db push --linked
 
 Las migraciones de Supabase y D1 son independientes. Esta migración instala la función de consulta de correo; no crea las tablas de la aplicación en D1. Consulta [Autenticación y seguridad](docs/04-autenticacion-y-seguridad.md) para plantillas de correo, SMTP y recuperación de contraseña.
 
-En **Supabase → Authentication → URL Configuration**, usa `http://localhost:3000` como URL local y permite estas rutas de redirección:
+En **Supabase → Authentication → URL Configuration**, usa `http://localhost:5173` como URL local y permite estas rutas de redirección:
 
 ```text
-http://localhost:3000/auth/confirm/start
-http://localhost:3000/auth/recovery/start
+http://localhost:5173/auth/confirm/start
+http://localhost:5173/auth/recovery/start
 ```
 
 Si ejecutas la aplicación en otro puerto, añade las mismas rutas con ese origen. En **Authentication → Email Templates**, configura **Confirm signup** y **Reset password** para enviar `TokenHash` a la aplicación:
@@ -100,7 +100,7 @@ Autentica Wrangler una vez y ejecuta Vinext con el binding remoto habilitado:
 
 ```sh
 pnpm exec wrangler login
-D1_REMOTE=true pnpm dev --port 3000 --strictPort
+D1_REMOTE=true pnpm dev
 ```
 
 Si ya tienes `CLOUDFLARE_API_TOKEN` en el entorno, no ejecutes `wrangler login`; inicia Vinext directamente con `D1_REMOTE=true`. La D1 remota debe tener aplicadas las migraciones de `database/d1/migrations/`. Si faltan, genera primero la configuración y aplica las migraciones a la base indicada por `D1_DATABASE_ID`:
@@ -117,10 +117,10 @@ Esto modifica el esquema de esa base remota. Para desarrollo, es preferible una 
 Con `.env.local` configurado y las migraciones D1 aplicadas, ejecuta:
 
 ```sh
-pnpm dev --port 3000 --strictPort
+pnpm dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). Vinext usa el puerto 3000 por defecto. Ejecutar Vite directamente suele usar 5173; Playwright usa 5180. Si cambias de puerto, actualiza también las URL de redirección de Supabase.
+Abre [http://localhost:5173](http://localhost:5173). El puerto de desarrollo queda fijado en `5173`; si está ocupado, Vinext falla en vez de elegir otro. Playwright usa `5180`.
 
 ## Comandos habituales
 

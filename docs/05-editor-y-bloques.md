@@ -43,11 +43,20 @@ Cada bloque es dueño de sus estilos. Su renderizador React debe conservar la mi
 
 ## Catálogo registrado
 
-`createPortfolioTemplate` emite `props: {}` para los ocho tipos de la plantilla: `hero`, `about`, `experience`, `projects`, `skills`, `testimonials`, `contact` y `footer`.
+Los ocho bloques de la plantilla están implementados en `resources/blocks/ui/portfolio` y reunidos en `portfolioBlockRegistry`, que `resources/blocks/index.ts` exporta junto con cada definición:
 
-Esos tipos aún no están registrados en `resources/blocks`; los implementa la issue de bloques iniciales de portafolio. Mientras tanto, ningún documento creado desde la plantilla puede validarse con `createSiteDocumentSchema`, porque cada tipo debe existir en el registro. No es un error actual porque la creación de proyectos todavía no valida el borrador, pero la primera validación previa a publicar debe ejecutarse con el registro completo.
+- `hero`: titular, introducción, imagen opcional y una llamada a la acción. Es el único bloque que emite el `h1`; el resto empieza en `h2`.
+- `about`: biografía y retrato opcional.
+- `experience`: puestos con periodo, descripción y enlace opcional.
+- `projects`: tarjetas de proyecto con imagen, resumen y enlace. Es el bloque que más assets referencia.
+- `skills`: lista plana de etiquetas, sin niveles ni porcentajes.
+- `testimonials`: opiniones opcionales; la plantilla lo emite con `hidden: true`.
+- `contact`: email, teléfono, ubicación y redes sociales.
+- `footer`: copyright y enlaces finales.
 
+`createPortfolioTemplate` resuelve cada tipo con `requireBlock(portfolioBlockRegistry, type)`, así que un tipo sin registrar falla al construir la plantilla con `UnknownBlockTypeError` en lugar de producir un documento inválido. Las props se emiten completas: la plantilla parte de los `defaultProps` de cada bloque y aplica encima solo el contenido propio. Un documento nuevo pasa `createSiteDocumentSchema` desde el primer momento, y añadir un bloque al catálogo no obliga a tocar los demás.
 
+El vocabulario de props es común y vive en `resources/blocks/domain/shared-props.ts`: texto y títulos, enlaces, imagen con texto alternativo, listas pequeñas, alineación, visibilidad, espaciado limitado y color de énfasis. Los enlaces se limitan a `http://`, `https://`, una ruta interna que empieza por `/` o un ancla que empieza por `#`, de modo que un documento no puede introducir `javascript:` ni otro esquema ejecutable.
 
 ## Propiedades permitidas
 

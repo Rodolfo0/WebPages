@@ -1,3 +1,4 @@
+import type { BlockProps, BlockSchemaRegistry } from '../../site-document';
 import type { AnyBlockDefinition } from './block-definition';
 
 /** Error thrown when a block type is not present in the registry. */
@@ -19,6 +20,8 @@ export type BlockRegistry = ReadonlyMap<string, AnyBlockDefinition>;
  *
  * The registry is keyed by `type`, which is the same value persisted in the document, so lookup at
  * render time never needs a second index.
+ *
+ * Definitions arrive already widened by `defineBlock`, which is where the props-erasure cast lives.
  */
 export function createBlockRegistry(
   definitions: readonly AnyBlockDefinition[],
@@ -59,17 +62,26 @@ export function findBlock(
   return registry.get(blockType);
 }
 
-/** Projects the registry into the validation-only shape `createSiteDocumentSchema` expects. */
-export function toBlockSchemaRegistry(registry: BlockRegistry) {
-  return Object.fromEntries(
-    [...registry].map(([type, definition]) => [
-      type,
-      {
-        propsSchema: definition.propsSchema,
-        defaultProps: definition.defaultProps,
-        assetIdsFromProps: definition.assetIdsFromProps,
-      },
-    ]),
-  );
-}
+/**
+ * Projects the registry into the validation-only shape `createSiteDocumentSchema` expects.
+ *
+ * `assetIdsFromProps` is forwarded because the server builds the published snapshot's
+ * `referenced_asset_ids_json` from this projection, through `collectSiteDocumentAssetIds`. The
+ * document schema validates each block's props with its own `propsSchema` before calling the
+ * selector, so the `BlockProps` parameter is safe. Code written against a definition directly still
+ * sees the narrow `P-typed` signature from `BlockDefinition`.
+ */
+export function toBlockSchemaRegistry(registry: BlockRegistry): BlockSchemaRegistry {
+  const projected: Record<string, BlockSchemaRegistry[string]> = {};
 
+  for (const [type, definition] of registry) {
+        projected[type] = {
+      propsSchema: definition.propsSchema,
+      defaultProps: definition.defaultProps,
+      assetIdsFromProps:
+        definition.assetIdsFromProps as ((props: BlockProps) => readonly string[]) | undefined,
+    };
+  }
+
+  return projected;
+}
