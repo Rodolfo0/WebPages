@@ -98,6 +98,10 @@ function CanvasBlock({
 }
 
 export default function ProjectEditor({ projectId }: { projectId: string }) {
+  return <ProjectEditorSession key={projectId} projectId={projectId} />;
+}
+
+function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [editorData, setEditorData] = useState<EditorData | null>(null);
   const [selection, setSelection] = useState<BlockSelection | null>(null);
   const [catalogOpened, setCatalogOpened] = useState(false);
@@ -163,12 +167,6 @@ export default function ProjectEditor({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setEditorData(null);
-    setSelection(null);
-    setCatalogSearch('');
-    setCatalogError('');
-    setLoadError('');
-    setLoading(true);
 
     fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
       cache: 'no-store',
