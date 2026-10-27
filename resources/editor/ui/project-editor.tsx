@@ -217,7 +217,9 @@ export default function ProjectEditor({ projectId }: { projectId: string }) {
               Selecciona una sección en la página o en la lista lateral.
             </Text>
             <Text size="sm" c="dimmed" mt={4}>
-              Los bloques añadidos en esta sesión todavía no se guardan.
+              {editorData?.project.canEdit
+                ? 'Los bloques añadidos en esta sesión todavía no se guardan.'
+                : 'Tienes acceso de solo lectura: puedes revisar el borrador, pero no modificarlo.'}
             </Text>
           </div>
           <Button component="a" href="/app/projects" variant="default">

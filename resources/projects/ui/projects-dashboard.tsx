@@ -283,9 +283,9 @@ export default function ProjectsDashboard() {
 
                   <Group justify="space-between" mt="xs">
                     <Group gap="xs">
-                      {project.canEdit && project.hasDraft && (
+                      {project.hasDraft && (
                         <Button onClick={() => openEditor(project)}>
-                          Abrir editor
+                          {project.canEdit ? 'Abrir editor' : 'Ver borrador'}
                         </Button>
                       )}
                       {project.canEdit && (
