@@ -8,6 +8,8 @@
 
 .hero {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 1rem;
   justify-items: inherit;
 }
@@ -68,7 +70,11 @@
 .actionLink {
   display: inline-flex;
   align-items: center;
+  max-width: 100%;
+  min-width: 0;
   min-height: 2.75rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-weight: 600;
   text-decoration: none;
 }
@@ -97,6 +103,8 @@
 
 .entry {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 0.25rem;
 }
 
@@ -145,6 +153,9 @@
 }
 
 .tag {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--block-text) 18%, transparent);
@@ -213,6 +224,8 @@
 
 .projectCard {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 0.5rem;
   align-content: start;
   padding: 1rem;
@@ -246,4 +259,6 @@
 
 .about > * {
   flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
 }

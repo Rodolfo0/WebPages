@@ -1,6 +1,9 @@
 .root {
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
   padding-block: 3rem;
   padding-inline: clamp(1rem, 5vw, 3rem);
   background: var(--block-bg);
@@ -13,8 +16,20 @@
 .inner {
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   max-width: 48rem;
   margin-inline: auto;
+}
+
+.body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.root :is(p, h1, h2, h3, h4, h5, h6, li, a, span) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .inner > * {

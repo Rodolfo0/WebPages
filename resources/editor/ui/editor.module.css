@@ -6,10 +6,13 @@
   max-height: calc(100dvh - 14rem);
   min-height: 32rem;
   overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
   padding: 1rem;
 }
 
 .pageCanvas {
+  overflow-anchor: none;
   margin-inline: auto;
   min-height: 32rem;
   max-width: 72rem;
@@ -51,6 +54,10 @@
 }
 
 .renderedBlock {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   pointer-events: none;
   user-select: none;
 }
