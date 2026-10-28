@@ -65,7 +65,7 @@ async function readJsonBody(request: Request) {
   }
 
   const text = await request.text();
-  if (text.length > 4096) throw new ProjectInputError('Los datos del proyecto son demasiado largos.');
+  if (text.length > 1_000_000) throw new ProjectInputError('Los datos del proyecto son demasiado largos.');
   try {
     return JSON.parse(text) as unknown;
   } catch {

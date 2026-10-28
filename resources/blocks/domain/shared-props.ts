@@ -60,7 +60,11 @@ export const assetIdSchema = z
   .max(128, 'El identificador de la imagen no es válido.');
 
 /** An optional asset reference, used by blocks whose image may be left empty. */
-export const optionalAssetIdSchema = z.string().trim().max(128).default('');
+export const optionalAssetIdSchema = z
+  .string()
+  .trim()
+  .max(128, 'El identificador de la imagen no es válido.')
+  .default('');
 
 /** Alt text for content images. `docs/06-media-y-formularios.md` requires it for content images. */
 export const altTextSchema = z.string().trim().max(160, 'El texto alternativo es demasiado largo.');

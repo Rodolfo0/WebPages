@@ -12,6 +12,7 @@ import type { AuthUser } from '../../auth';
 import { createSiteDocumentSchema } from '../../site-document';
 import { projectAccessDenied, ProjectAccessError } from '../domain/access';
 import { ProjectSlugConflictError } from './create-project';
+import { ProjectInputError } from '../domain/project';
 import { projectPermissionPredicate } from './access';
 
 const projectDocumentSchema = createSiteDocumentSchema(toBlockSchemaRegistry(portfolioBlockRegistry));
@@ -153,27 +154,43 @@ export async function updateProject(
   database: D1Database,
   authUser: AuthUser,
   projectId: string,
-  details: { name: string; slug: string },
+  details: { name?: string; slug?: string; draftDocument?: unknown },
 ) {
   if (typeof projectId !== 'string' || !projectId.trim()) throw projectAccessDenied();
 
   try {
     const db = createDb(database);
+    let validatedDraft;
+    if (details.draftDocument !== undefined) {
+      const parsedDraft = projectDocumentSchema.safeParse(details.draftDocument);
+      if (!parsedDraft.success) {
+        throw new ProjectInputError(parsedDraft.error.issues[0]?.message ?? 'El borrador contiene valores inválidos.');
+      }
+      validatedDraft = parsedDraft.data;
+    }
+
+    const nextValues: Record<string, unknown> = { updatedAt: new Date() };
+    if (details.name !== undefined) nextValues.name = details.name;
+    if (details.slug !== undefined) nextValues.slug = details.slug;
+    if (details.slug !== undefined) {
+      nextValues.draftDocumentJson = sql<string>`json_set(${projects.draftDocumentJson}, '$.site.slug', ${details.slug})`;
+    }
+    if (validatedDraft !== undefined) {
+      nextValues.draftDocumentJson = JSON.stringify(validatedDraft);
+    }
+
     const [updated] = await db
       .update(projects)
-      .set({
-        name: details.name,
-        slug: details.slug,
-        draftDocumentJson: sql<string>`json_set(${projects.draftDocumentJson}, '$.site.slug', ${details.slug})`,
-        updatedAt: new Date(),
-      })
+      .set(nextValues)
       .where(and(
         eq(projects.id, projectId),
-        sql`NOT EXISTS (
-          SELECT 1 FROM projects AS conflicting
-          WHERE conflicting.slug = ${details.slug}
-            AND conflicting.id <> ${projectId}
-        )`,
+        details.slug === undefined
+          ? sql`1 = 1`
+          : sql`NOT EXISTS (
+              SELECT 1 FROM projects AS conflicting
+              WHERE conflicting.slug = ${details.slug}
+                AND conflicting.id <> ${projectId}
+            )`,
         projectPermissionPredicate(authUser.id, projectId, 'project:update'),
       ))
       .returning({
@@ -195,9 +212,10 @@ export async function updateProject(
       .limit(1);
 
     if (!accessibleProject) throw projectAccessDenied();
-    throw new ProjectSlugConflictError();
+    if (details.slug !== undefined) throw new ProjectSlugConflictError();
+    throw new ProjectManagementError();
   } catch (error) {
-    if (error instanceof ProjectAccessError || error instanceof ProjectSlugConflictError) throw error;
+    if (error instanceof ProjectAccessError || error instanceof ProjectSlugConflictError || error instanceof ProjectInputError) throw error;
     if (isProjectSlugConstraintError(error)) throw new ProjectSlugConflictError();
     throw new ProjectManagementError();
   }

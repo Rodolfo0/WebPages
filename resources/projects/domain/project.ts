@@ -15,8 +15,9 @@ const createProjectSchema = z.strictObject({
 });
 
 const updateProjectSchema = z.strictObject({
-  name: projectNameSchema,
-  slug: projectSlugSchema,
+  name: projectNameSchema.optional(),
+  slug: projectSlugSchema.optional(),
+  draftDocument: z.unknown().optional(),
 });
 
 const PROJECT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -90,6 +91,19 @@ export function parseCreateProjectInput(input: unknown) {
 }
 
 export function parseUpdateProjectInput(input: unknown) {
-  return parseDetails(input, updateProjectSchema, false);
+  const result = updateProjectSchema.safeParse(input);
+  if (!result.success) {
+    throw new ProjectInputError(result.error.issues[0]?.message ?? 'Revisa los datos del proyecto.');
+  }
+
+  const name = result.data.name;
+  const slug = result.data.slug ? normalizeProjectSlug(result.data.slug) : undefined;
+  const draftDocument = result.data.draftDocument;
+
+  if (!name && !slug && draftDocument === undefined) {
+    throw new ProjectInputError('No se proporcionaron cambios para guardar.');
+  }
+
+  return { name, slug, draftDocument };
 }
 
