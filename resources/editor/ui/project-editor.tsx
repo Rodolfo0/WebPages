@@ -120,9 +120,12 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [propertyErrors, setPropertyErrors] = useState<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [saveError, setSaveError] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const lastSavedDraft = useRef('');
   const saveRevision = useRef(0);
   const canvasBlockFrames = useRef(new Map<string, HTMLDivElement>());
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
 
   function selectBlock(nextSelection: BlockSelection) {
     setSelection(nextSelection);
@@ -239,6 +242,32 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     updatePropertyDraft(nextDraft);
   }
 
+  async function uploadImage(file: File | null, targetPath: (string | number)[] = ['imageAssetId']) {
+    if (!file || !editorData) return;
+    setUploadingImage(true);
+    setUploadError('');
+    try {
+      const form = new FormData();
+      form.set('file', file);
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, {
+        method: 'POST',
+        cache: 'no-store',
+        body: form,
+      });
+      const result = await response.json().catch(() => ({})) as {
+        asset?: { id: string };
+        message?: string;
+      };
+      if (!response.ok) throw new Error(result.message ?? 'No se pudo subir la imagen.');
+      if (!result.asset?.id) throw new Error('La subida no devolvió un identificador de imagen.');
+      updateNestedProperty(targetPath, result.asset.id);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'No se pudo subir la imagen.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   const saveDraftDocument = useCallback(async (documentToSave: SiteDocument) => {
     const revision = ++saveRevision.current;
     const serializedDraft = JSON.stringify(documentToSave);
@@ -304,6 +333,57 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     }
 
     if (typeof value === 'string') {
+      if (key === 'imageAssetId') {
+        const canEditImage = editorData?.project.canEdit ?? false;
+        return (
+          <Stack key={path.join('.')} gap="xs">
+            <TextInput
+              label={label}
+              description="Identificador generado automáticamente"
+              placeholder="Sin imagen seleccionada"
+              maxLength={maxLength}
+              readOnly
+              value={value}
+              error={error}
+            />
+            <input
+              ref={imageFileInputRef}
+              type="file"
+              hidden
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0] ?? null;
+                event.currentTarget.value = '';
+                void uploadImage(file, path);
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Button
+                type="button"
+                variant="light"
+                disabled={!canEditImage || uploadingImage}
+                leftSection={uploadingImage ? <Loader size="xs" /> : undefined}
+                onClick={() => imageFileInputRef.current?.click()}
+              >
+                {uploadingImage ? 'Subiendo…' : value ? 'Cambiar imagen' : 'Subir imagen'}
+              </Button>
+              <Button
+                type="button"
+                variant="subtle"
+                color="red"
+                disabled={!canEditImage || uploadingImage || !value}
+                onClick={() => {
+                  setUploadError('');
+                  updateNestedProperty(path, '');
+                }}
+              >
+                Quitar imagen
+              </Button>
+            </div>
+            {uploadError ? <Alert color="red" variant="light">{uploadError}</Alert> : null}
+          </Stack>
+        );
+      }
       if (key === 'align') {
         return (
           <Select

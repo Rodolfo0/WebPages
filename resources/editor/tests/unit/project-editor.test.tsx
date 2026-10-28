@@ -141,27 +141,26 @@ describe('ProjectEditor properties panel', () => {
     expect(await screen.findByText(/debe comenzar con http:\/\/|debe comenzar con https:\/\/|begin with http/i)).toBeInTheDocument();
   });
 
-  it('shows a clear field error for an oversized image identifier without replacing the draft', async () => {
+  it('shows the image identifier as readonly with upload and clear actions', async () => {
     renderEditor();
 
     const image = (await screen.findAllByLabelText('Imagen'))[0];
-    fireEvent.change(image, { target: { value: 'x'.repeat(129) } });
-
-    expect(image).toHaveValue('x'.repeat(129));
-    expect(await screen.findByText('El identificador de la imagen no es válido.')).toBeInTheDocument();
+    expect(image).toHaveAttribute('readonly');
+    expect(screen.getAllByRole('button', { name: /Subir imagen|Cambiar imagen/ })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Quitar imagen' })[0]).toBeInTheDocument();
   });
 
   it('edits image fields, alignment, visibility and spacing', async () => {
     renderEditor();
 
-    const images = await screen.findAllByLabelText('Imagen');
-    fireEvent.change(images[0], { target: { value: 'asset-hero-2' } });
+    await screen.findAllByLabelText('Imagen');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Quitar imagen' })[0]);
     fireEvent.change(screen.getAllByLabelText('Texto alternativo')[0], { target: { value: 'Portrait of Alex' } });
     fireEvent.click(screen.getAllByRole('combobox', { name: 'Alineación' })[0]);
     fireEvent.click(await screen.findByText('Derecha'));
     fireEvent.click(screen.getByRole('switch', { name: 'Ocultar sección' }));
 
-    expect(screen.getAllByLabelText('Imagen')[0]).toHaveValue('asset-hero-2');
+    expect(screen.getAllByLabelText('Imagen')[0]).toHaveValue('');
     expect(screen.getAllByLabelText('Texto alternativo')[0]).toHaveValue('Portrait of Alex');
     expect(screen.getAllByRole('combobox', { name: 'Alineación' })[0]).toHaveValue('Derecha');
     expect(screen.getAllByRole('combobox', { name: 'Espaciado' })[0]).toHaveValue('Amplio');
