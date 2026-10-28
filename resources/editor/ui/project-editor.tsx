@@ -126,13 +126,18 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const saveRevision = useRef(0);
   const canvasBlockFrames = useRef(new Map<string, HTMLDivElement>());
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const sectionsPanelRef = useRef<HTMLDivElement | null>(null);
 
   function selectBlock(nextSelection: BlockSelection) {
+    const panelScrollTop = sectionsPanelRef.current?.scrollTop ?? 0;
     setSelection(nextSelection);
     const page = editorData?.draftDocument.pages.find((candidate) => candidate.id === nextSelection.pageId);
     const block = page?.blocks.find((candidate) => candidate.id === nextSelection.blockId);
     setPropertyDraft(block ? structuredClone(block.props) : null);
     setPropertyErrors({});
+    requestAnimationFrame(() => {
+      if (sectionsPanelRef.current) sectionsPanelRef.current.scrollTop = panelScrollTop;
+    });
   }
 
   function registerCanvasBlock(selectionToRegister: BlockSelection, frame: HTMLDivElement | null) {
@@ -675,7 +680,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             </section>
 
             <aside aria-label="Lista de secciones" className="order-first min-w-0 lg:order-none">
-              <Card withBorder radius="lg" padding="md">
+              <Card ref={sectionsPanelRef} withBorder radius="lg" padding="md" className={styles.sectionsPanel}>
                 <Stack gap="md">
                   <div>
                     <Title order={2}>Secciones</Title>
@@ -694,7 +699,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                   >
                     Agregar sección
                   </Button>
-                  <nav aria-label="Secciones del sitio">
+                  <nav aria-label="Secciones del sitio" className={styles.sectionsNav}>
                     <Stack gap="lg">
                       {editorData.draftDocument.pages.map((page) => (
                         <section key={page.id} aria-label={`Página ${page.path}`}>
