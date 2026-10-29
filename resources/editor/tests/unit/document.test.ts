@@ -99,4 +99,28 @@ describe('updateBlockProps', () => {
       spacing: 'huge',
     })).toThrow(BlockPropsValidationError);
   });
+
+  it('updates visual setups between default, modern and artsy', () => {
+    const modernDoc = updateBlockProps(document, page.id, hero.id, {
+      setup: 'modern',
+      align: 'left',
+      spacing: 'compact',
+    });
+    expect(modernDoc.pages[0].blocks[0].props.setup).toBe('modern');
+    expect(modernDoc.pages[0].blocks[0].props.align).toBe('left');
+    expect(modernDoc.pages[0].blocks[0].props.spacing).toBe('compact');
+
+    const artsyDoc = updateBlockProps(modernDoc, page.id, hero.id, {
+      setup: 'artsy',
+    });
+    expect(artsyDoc.pages[0].blocks[0].props.setup).toBe('artsy');
+    expect(artsyDoc.pages[0].blocks[0].props.align).toBe('left');
+    expect(artsyDoc.pages[0].blocks[0].props.spacing).toBe('compact');
+  });
+
+  it('rejects values outside the setup enum', () => {
+    expect(() => updateBlockProps(document, page.id, hero.id, {
+      setup: 'futuristic',
+    })).toThrow(BlockPropsValidationError);
+  });
 });

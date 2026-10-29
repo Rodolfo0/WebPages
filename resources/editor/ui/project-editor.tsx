@@ -133,7 +133,11 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     setSelection(nextSelection);
     const page = editorData?.draftDocument.pages.find((candidate) => candidate.id === nextSelection.pageId);
     const block = page?.blocks.find((candidate) => candidate.id === nextSelection.blockId);
-    setPropertyDraft(block ? structuredClone(block.props) : null);
+    const def = block ? portfolioBlockRegistry.get(block.type) : undefined;
+    const initialProps = block
+      ? (def?.defaultProps ? { ...def.defaultProps, ...block.props } : structuredClone(block.props))
+      : null;
+    setPropertyDraft(initialProps);
     setPropertyErrors({});
     requestAnimationFrame(() => {
       if (sectionsPanelRef.current) sectionsPanelRef.current.scrollTop = panelScrollTop;
@@ -161,6 +165,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
   function humanizeProperty(key: string) {
     const labels: Record<string, string> = {
+      setup: 'Setup',
       headline: 'Titular', eyebrow: 'Texto superior', introduction: 'Presentación',
       imageAssetId: 'Imagen', imageAlt: 'Texto alternativo', ctaLabel: 'Texto del botón', ctaUrl: 'Enlace del botón',
       heading: 'Título', body: 'Contenido', message: 'Mensaje', email: 'Email', phone: 'Teléfono',
@@ -338,6 +343,24 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     }
 
     if (typeof value === 'string') {
+      if (key === 'setup') {
+        return (
+          <Select
+            key={path.join('.')}
+            label="Setup"
+            description="Elige el estilo visual para esta sección"
+            value={value}
+            disabled={!editorData?.project.canEdit}
+            data={[
+              { value: 'default', label: 'Default' },
+              { value: 'modern', label: 'Modern' },
+              { value: 'artsy', label: 'Artsy' },
+            ]}
+            error={error}
+            onChange={(nextValue) => updateNestedProperty(path, nextValue ?? 'default')}
+          />
+        );
+      }
       if (key === 'imageAssetId') {
         const canEditImage = editorData?.project.canEdit ?? false;
         return (
@@ -576,7 +599,11 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         if (firstPage && firstBlock) {
           const initialSelection = { pageId: firstPage.id, blockId: firstBlock.id };
           setSelection(initialSelection);
-          setPropertyDraft(structuredClone(firstBlock.props));
+          const def = portfolioBlockRegistry.get(firstBlock.type);
+          const initialProps = def?.defaultProps
+            ? { ...def.defaultProps, ...firstBlock.props }
+            : structuredClone(firstBlock.props);
+          setPropertyDraft(initialProps);
           setPropertyErrors({});
         }
       })
@@ -737,7 +764,9 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                         <Text size="xs" c="dimmed">
                           {selectedDefinition.label}
                         </Text>
-                        {Object.entries(propertyDraft).map(([key, value]) => (
+                        {Object.entries(propertyDraft)
+                          .sort(([a], [b]) => (a === 'setup' ? -1 : b === 'setup' ? 1 : 0))
+                          .map(([key, value]) => (
                           renderPropertyEditor(key, value, [key])
                         ))}
                         {propertyErrors.root && (

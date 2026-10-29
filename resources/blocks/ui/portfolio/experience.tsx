@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineBlock } from '../../domain/block-definition';
 import {
   blockAlignmentSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -29,6 +30,7 @@ const experienceEntrySchema = z.strictObject({
 const MAX_EXPERIENCE_ENTRIES = 12;
 
 export const experiencePropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   heading: shortTextSchema(60, 'El título'),
   entries: z
     .array(experienceEntrySchema)
@@ -58,6 +60,7 @@ export const experienceBlock = defineBlock<ExperienceProps>({
   description: 'Puestos y etapas profesionales en orden cronológico.',
   propsSchema: experiencePropsSchema,
   defaultProps: experiencePropsSchema.parse({
+    setup: 'default',
     heading: 'Experiencia',
     entries: [
       {
@@ -91,12 +94,14 @@ export const experienceBlock = defineBlock<ExperienceProps>({
     return (
       <BlockSection
         align={props.align}
+        spacing={props.spacing}
         theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
         anchor={props.anchor}
         headingId={`${blockId}-heading`}
         heading={props.heading}
         headingLevel={2}
         hidden={props.hidden}
+        data-setup={props.setup}
       >
         <BlockEntries entries={props.entries.map(toEntry)} />
         <BlockActions

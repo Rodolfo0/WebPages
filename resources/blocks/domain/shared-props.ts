@@ -21,6 +21,9 @@ export const BLOCK_ALIGNMENTS = ['left', 'center', 'right'] as const;
 /** How a link or a link list is presented. */
 export const BLOCK_LINK_STYLES = ['text', 'buttons'] as const;
 
+/** Visual setups/themes available for customizable blocks. */
+export const BLOCK_SETUPS = ['default', 'modern', 'artsy'] as const;
+
 /**
  * Protocols an external link may use.
  *
@@ -33,6 +36,7 @@ const SAFE_URL_PATTERN = /^(?:https?:\/\/|\/|#)/i;
 export const blockAlignmentSchema = z.enum(BLOCK_ALIGNMENTS);
 export const blockSpacingSchema = z.enum(BLOCK_SPACINGS);
 export const blockLinkStyleSchema = z.enum(BLOCK_LINK_STYLES);
+export const blockSetupSchema = z.enum(BLOCK_SETUPS);
 
 /**
  * A required, safe URL.
@@ -102,3 +106,4 @@ export const anchorSchema = z
 export type BlockAlignment = z.output<typeof blockAlignmentSchema>;
 export type BlockSpacing = z.output<typeof blockSpacingSchema>;
 export type BlockLinkStyle = z.output<typeof blockLinkStyleSchema>;
+export type BlockSetup = z.output<typeof blockSetupSchema>;

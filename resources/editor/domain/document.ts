@@ -35,7 +35,7 @@ export function updateBlockProps(
   if (!block) throw new Error('No se encontró la sección seleccionada.');
 
   const definition = requireBlock(portfolioBlockRegistry, block.type);
-  const parsedProps = definition.propsSchema.safeParse({ ...block.props, ...patch });
+  const parsedProps = definition.propsSchema.safeParse({ ...definition.defaultProps, ...block.props, ...patch });
 
   if (!parsedProps.success) {
     const issues = parsedProps.error.issues.map((issue) => ({

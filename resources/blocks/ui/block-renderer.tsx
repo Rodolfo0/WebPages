@@ -48,6 +48,8 @@ export function BlockHeading({ id, level, children }: BlockHeadingProps) {
 export type BlockSectionProps = {
   /** Current section alignment, applied with logical text alignment. */
   align: BlockAlignment;
+  /** Vertical density of the section frame and its content. */
+  spacing: 'compact' | 'comfortable' | 'spacious';
   theme: ThemeTokens;
   /**
    * Optional in-page anchor rendered as the section id, so a sibling block can link to `#anchor`.
@@ -61,6 +63,10 @@ export type BlockSectionProps = {
   headingLevel: HeadingLevel;
   /** Hides the heading and the content from view while keeping the section in the document. */
   hidden: boolean;
+  /** Optional class name attached to the section element. */
+  className?: string;
+  /** Visual setup identifier (e.g. 'default', 'modern', 'artsy'). */
+  'data-setup'?: string;
   children: ReactNode;
 };
 
@@ -72,21 +78,26 @@ export type BlockSectionProps = {
  */
 export function BlockSection({
   align,
+  spacing,
   theme,
   anchor,
   headingId,
   heading,
   headingLevel,
   hidden,
+  className,
+  'data-setup': dataSetup,
   children,
 }: BlockSectionProps) {
   return (
     <section
       id={anchor || undefined}
       aria-labelledby={headingId}
-      className={styles.root}
+      className={[styles.root, className].filter(Boolean).join(' ')}
       data-block-align={align}
+      data-block-spacing={spacing}
       data-block-hidden={hidden ? 'true' : undefined}
+      data-setup={dataSetup}
       // Visibility comes from the block stylesheet, so the block keeps its own appearance rules.
       inert={hidden || undefined}
       style={{ ...blockThemeStyle(theme), textAlign: align } as CSSProperties}
@@ -102,5 +113,4 @@ export function BlockSection({
 }
 
 export { styles as blockStyles };
-
 

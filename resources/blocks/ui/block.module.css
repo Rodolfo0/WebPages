@@ -13,6 +13,18 @@
   line-height: 1.6;
 }
 
+.root[data-block-spacing='compact'] {
+  padding-block: 1.75rem;
+}
+
+.root[data-block-spacing='comfortable'] {
+  padding-block: 3rem;
+}
+
+.root[data-block-spacing='spacious'] {
+  padding-block: 4.5rem;
+}
+
 .inner {
   box-sizing: border-box;
   width: 100%;
@@ -68,4 +80,3 @@
   outline: 2px solid var(--block-accent);
   outline-offset: 2px;
 }
-

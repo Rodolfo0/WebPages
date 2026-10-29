@@ -11,6 +11,7 @@ import {
 import { defineBlock } from '../../domain/block-definition';
 import { blockStyles, BlockSection } from '../../ui/block-renderer';
 import { blockThemeStyle } from '../../ui/block-theme-style';
+import { PORTFOLIO_BLOCKS } from '../../ui/portfolio';
 
 const samplePropsSchema = z.strictObject({
   title: z.string().trim().max(120).default('Título'),
@@ -123,6 +124,31 @@ describe('registry projection for the site document schema', () => {
   });
 });
 
+describe('portfolio setup contract', () => {
+  it('exposes default setup on every portfolio block and accepts all three setups', () => {
+    for (const block of PORTFOLIO_BLOCKS) {
+      expect(block.defaultProps).toHaveProperty('setup', 'default');
+
+      for (const setup of ['default', 'modern', 'artsy'] as const) {
+        const parsed = block.propsSchema.safeParse({
+          ...block.defaultProps,
+          setup,
+        });
+        expect(parsed.success, `${block.type} should accept ${setup}`).toBe(true);
+      }
+    }
+  });
+
+  it('rejects an unknown setup on every portfolio block', () => {
+    for (const block of PORTFOLIO_BLOCKS) {
+      expect(block.propsSchema.safeParse({
+        ...block.defaultProps,
+        setup: 'futuristic',
+      }).success, block.type).toBe(false);
+    }
+  });
+});
+
 describe('renderer contract', () => {
   it('maps theme tokens to custom properties instead of Mantine styles', () => {
     const style = blockThemeStyle(DEFAULT_THEME_TOKENS) as Record<string, string>;
@@ -137,4 +163,3 @@ describe('renderer contract', () => {
     expect(BlockSection).toBeTypeOf('function');
   });
 });
-

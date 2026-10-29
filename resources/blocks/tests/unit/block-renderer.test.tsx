@@ -14,6 +14,7 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof BlockSecti
   return render(
     <BlockSection
       align="left"
+      spacing="comfortable"
       theme={theme}
       headingId="block-1-heading"
       heading="Sobre mí"
@@ -60,6 +61,16 @@ describe('block section renderer', () => {
     expect(screen.getByRole('region', { name: 'Sobre mí' }).style.textAlign).toBe('center');
   });
 
+  it.each(['compact', 'comfortable', 'spacious'] as const)(
+    'applies the %s spacing setup',
+    (spacing) => {
+      renderSection({ spacing, 'data-setup': 'modern' });
+      const section = screen.getByRole('region', { name: 'Sobre mí' });
+      expect(section).toHaveAttribute('data-block-spacing', spacing);
+      expect(section).toHaveAttribute('data-setup', 'modern');
+    },
+  );
+
   it('removes a hidden block from view', () => {
     renderSection({ hidden: true });
 
@@ -83,4 +94,3 @@ describe('block section renderer', () => {
     expect(screen.getByText('Contenido del bloque.')).toBeVisible();
   });
 });
-

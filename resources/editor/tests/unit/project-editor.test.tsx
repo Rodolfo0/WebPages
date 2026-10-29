@@ -167,6 +167,21 @@ describe('ProjectEditor properties panel', () => {
     expect(screen.getByRole('switch', { name: 'Ocultar sección' })).toBeChecked();
   });
 
+  it('toggles visual setups between default, modern and artsy', async () => {
+    renderEditor();
+
+    const setupCombobox = await screen.findByRole('combobox', { name: 'Setup' });
+    expect(setupCombobox).toHaveValue('Default');
+
+    fireEvent.click(setupCombobox);
+    fireEvent.click(await screen.findByText('Modern'));
+    expect(screen.getByRole('combobox', { name: 'Setup' })).toHaveValue('Modern');
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Setup' }));
+    fireEvent.click(await screen.findByText('Artsy'));
+    expect(screen.getByRole('combobox', { name: 'Setup' })).toHaveValue('Artsy');
+  });
+
   it('disables editing when the project is read-only', async () => {
     fetchMock.mockImplementation(async (_input, init) => {
       if (init?.method === 'PATCH') return jsonResponse({ message: 'No se pudo guardar.' }, 503);

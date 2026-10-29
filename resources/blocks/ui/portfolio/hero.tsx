@@ -3,6 +3,7 @@ import { defineBlock } from '../../domain/block-definition';
 import {
   altTextSchema,
   blockAlignmentSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -22,6 +23,7 @@ import styles from '../portfolio-blocks.module.css';
  * starts at `h2`, so the public page keeps one `h1` and a predictable outline.
  */
 export const heroPropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   headline: shortTextSchema(120, 'El titular'),
   introduction: z
     .string()
@@ -47,6 +49,7 @@ export const heroBlock = defineBlock({
   description: 'Titular, introducción y una llamada a la acción al inicio de la página.',
   propsSchema: heroPropsSchema,
   defaultProps: heroPropsSchema.parse({
+    setup: 'default',
     eyebrow: 'Portafolio',
     headline: 'Hola, soy Alex Rivera',
     introduction:
@@ -57,17 +60,27 @@ export const heroBlock = defineBlock({
     spacing: 'spacious',
   }),
   assetIdsFromProps: (props) => (props.imageAssetId ? [props.imageAssetId] : []),
-  reactComponent: ({ props, blockId, theme }) => (
+  reactComponent: ({ props, blockId, theme }) => {
+    const setup = props.setup ?? 'default';
+    return (
     <BlockSection
       align={props.align}
+      spacing={props.spacing}
       theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
       anchor={props.anchor}
       headingId={`${blockId}-heading`}
       heading={props.headline}
       headingLevel={1}
       hidden={props.hidden}
+      className={styles.heroSection}
+      data-setup={setup}
     >
-      <div className={styles.hero} data-spacing={props.spacing}>
+      <div
+        className={styles.hero}
+        data-align={props.align}
+        data-setup={setup}
+        data-spacing={props.spacing}
+      >
         {props.eyebrow ? <p className={styles.eyebrow}>{props.eyebrow}</p> : null}
         {props.introduction ? <p className={styles.lead}>{props.introduction}</p> : null}
         <BlockMedia
@@ -80,6 +93,6 @@ export const heroBlock = defineBlock({
         />
       </div>
     </BlockSection>
-  ),
+    );
+  },
 });
-

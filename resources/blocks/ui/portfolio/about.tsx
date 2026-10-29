@@ -3,6 +3,7 @@ import { defineBlock } from '../../domain/block-definition';
 import {
   altTextSchema,
   blockAlignmentSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -21,6 +22,7 @@ import styles from '../portfolio-blocks.module.css';
  * can be edited, so the schema keeps a single string instead of a rich-text structure.
  */
 export const aboutPropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   heading: shortTextSchema(60, 'El título'),
   body: z.string().trim().max(1200, 'La descripción no puede superar 1200 caracteres.'),
   imageAssetId: optionalAssetIdSchema,
@@ -40,6 +42,7 @@ export const aboutBlock = defineBlock<AboutProps>({
   description: 'Una presentación breve con una fotografía opcional.',
   propsSchema: aboutPropsSchema,
   defaultProps: aboutPropsSchema.parse({
+    setup: 'default',
     heading: 'Sobre mí',
     body:
       'Llevo ocho años diseñando y construyendo productos digitales. Me interesa el punto donde la accesibilidad, el rendimiento y el detalle visual se encuentran, y trabajo mejor en equipos que documentan sus decisiones.',
@@ -50,12 +53,14 @@ export const aboutBlock = defineBlock<AboutProps>({
   reactComponent: ({ props, blockId, theme }) => (
     <BlockSection
       align={props.align}
+      spacing={props.spacing}
       theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
       anchor={props.anchor}
       headingId={`${blockId}-heading`}
       heading={props.heading}
       headingLevel={2}
       hidden={props.hidden}
+      data-setup={props.setup}
     >
       <div className={styles.about}>
         <BlockMedia assetId={props.imageAssetId} alt={props.imageAlt} className={styles.portrait} />
