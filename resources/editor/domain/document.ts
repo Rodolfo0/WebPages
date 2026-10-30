@@ -99,3 +99,47 @@ export function addBlockToDocument(
     blockId,
   };
 }
+
+/** Reorders one block within its page and validates the resulting document. */
+export function moveBlockInDocument(document: SiteDocument, pageId: string, blockId: string, targetIndex: number) {
+  const page = document.pages.find((candidate) => candidate.id === pageId);
+  if (!page) throw new Error('No se encontrÃ³ la pÃ¡gina seleccionada.');
+  const sourceIndex = page.blocks.findIndex((block) => block.id === blockId);
+  if (sourceIndex < 0) throw new Error('No se encontrÃ³ la secciÃ³n seleccionada.');
+  const blocks = [...page.blocks];
+  const [block] = blocks.splice(sourceIndex, 1);
+  blocks.splice(Math.max(0, Math.min(targetIndex, blocks.length)), 0, block);
+  return editorDocumentSchema.parse({
+    ...document,
+    pages: document.pages.map((candidate) => candidate.id === pageId ? { ...candidate, blocks } : candidate),
+  });
+}
+
+/** Clones a block with a fresh id and places it immediately after the source. */
+export function duplicateBlockInDocument(document: SiteDocument, pageId: string, blockId: string) {
+  const page = document.pages.find((candidate) => candidate.id === pageId);
+  if (!page) throw new Error('No se encontrÃ³ la pÃ¡gina seleccionada.');
+  const sourceIndex = page.blocks.findIndex((block) => block.id === blockId);
+  if (sourceIndex < 0) throw new Error('No se encontrÃ³ la secciÃ³n seleccionada.');
+  const duplicate = { ...structuredClone(page.blocks[sourceIndex]), id: crypto.randomUUID() };
+  const blocks = [...page.blocks];
+  blocks.splice(sourceIndex + 1, 0, duplicate);
+  const nextDocument = editorDocumentSchema.parse({
+    ...document,
+    pages: document.pages.map((candidate) => candidate.id === pageId ? { ...candidate, blocks } : candidate),
+  });
+  return { document: nextDocument, blockId: duplicate.id };
+}
+
+/** Removes a block and validates the resulting document. */
+export function deleteBlockFromDocument(document: SiteDocument, pageId: string, blockId: string) {
+  const page = document.pages.find((candidate) => candidate.id === pageId);
+  if (!page) throw new Error('No se encontrÃ³ la pÃ¡gina seleccionada.');
+  if (!page.blocks.some((block) => block.id === blockId)) throw new Error('No se encontrÃ³ la secciÃ³n seleccionada.');
+  return editorDocumentSchema.parse({
+    ...document,
+    pages: document.pages.map((candidate) => candidate.id === pageId
+      ? { ...candidate, blocks: candidate.blocks.filter((block) => block.id !== blockId) }
+      : candidate),
+  });
+}
