@@ -23,6 +23,9 @@
 *.pem
 *.tsbuildinfo
 
+# editor-local workspace settings
+/.vscode/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
