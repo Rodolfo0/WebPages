@@ -3,6 +3,7 @@ import { defineBlock } from '../../domain/block-definition';
 import {
   blockAlignmentSchema,
   blockLinkStyleSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -35,6 +36,7 @@ const socialLinkSchema = z.strictObject({
 const MAX_SOCIAL_LINKS = 8;
 
 export const contactPropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   heading: shortTextSchema(60, 'El título'),
   message: z.string().trim().max(400, 'El mensaje no puede superar 400 caracteres.'),
   email: z.union([z.literal(''), z.string().trim().regex(EMAIL_PATTERN, 'Escribe un email válido.')]).default(''),
@@ -60,6 +62,7 @@ export const contactBlock = defineBlock<ContactProps>({
   description: 'Cómo escribirte, redes sociales y ubicación.',
   propsSchema: contactPropsSchema,
   defaultProps: contactPropsSchema.parse({
+    setup: 'default',
     heading: 'Contacto',
     message: '¿Tienes un proyecto en mente? Escríbeme y te respondo en un par de días.',
     email: 'hola@example.com',
@@ -92,35 +95,39 @@ export const contactBlock = defineBlock<ContactProps>({
     return (
       <BlockSection
         align={props.align}
+        spacing={props.spacing}
         theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
         anchor={props.anchor}
         headingId={`${blockId}-heading`}
         heading={props.heading}
         headingLevel={2}
         hidden={props.hidden}
+        data-setup={props.setup}
       >
-        {props.message ? <p className={styles.lead}>{props.message}</p> : null}
-        <ul className={styles.contactList}>
-          {props.email ? (
-            <li>
-              <span className={styles.contactLabel}>Email: </span>
-              <a href={`mailto:${props.email}`}>{props.email}</a>
-            </li>
-          ) : null}
-          {props.phone ? (
-            <li>
-              <span className={styles.contactLabel}>Teléfono: </span>
-              <a href={`tel:${props.phone.replace(/[^\d+]/g, '')}`}>{props.phone}</a>
-            </li>
-          ) : null}
-          {props.location ? (
-            <li>
-              <span className={styles.contactLabel}>Ubicación: </span>
-              {props.location}
-            </li>
-          ) : null}
-        </ul>
-        <BlockActions items={items} />
+        <div className={styles.contact}>
+          {props.message ? <p className={styles.lead}>{props.message}</p> : null}
+          <ul className={styles.contactList}>
+            {props.email ? (
+              <li>
+                <span className={styles.contactLabel}>Email: </span>
+                <a href={`mailto:${props.email}`}>{props.email}</a>
+              </li>
+            ) : null}
+            {props.phone ? (
+              <li>
+                <span className={styles.contactLabel}>Teléfono: </span>
+                <a href={`tel:${props.phone.replace(/[^\d+]/g, '')}`}>{props.phone}</a>
+              </li>
+            ) : null}
+            {props.location ? (
+              <li>
+                <span className={styles.contactLabel}>Ubicación: </span>
+                {props.location}
+              </li>
+            ) : null}
+          </ul>
+          <BlockActions items={items} />
+        </div>
       </BlockSection>
     );
   },

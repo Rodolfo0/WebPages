@@ -6,14 +6,88 @@
  * never leaks into a published site.
  */
 
+.heroSection {
+  transition: padding 0.2s ease;
+}
+
+.heroSection[data-setup='modern'] h1 {
+  letter-spacing: -0.025em;
+  font-weight: 800;
+  font-size: clamp(2.25rem, 4vw, 3rem);
+  line-height: 1.15;
+}
+
+.heroSection[data-setup='artsy'] h1 {
+  font-style: italic;
+  letter-spacing: -0.01em;
+  font-weight: 400;
+  font-size: clamp(2.5rem, 4.5vw, 3.25rem);
+  line-height: 1.2;
+}
+
 .hero {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 1rem;
-  justify-items: inherit;
+  justify-items: center;
 }
 
 .heroImage {
   order: -1;
+  transition: transform 0.2s ease, margin 0.2s ease;
+}
+
+/* Alignments for hero, image and actions */
+.hero[data-align='left'],
+:global([data-block-align='left']) .hero {
+  justify-items: start;
+  text-align: start;
+}
+
+.hero[data-align='left'] .heroImage,
+:global([data-block-align='left']) .hero .heroImage {
+  justify-self: start;
+  margin-inline: 0 auto;
+}
+
+.hero[data-align='left'] .actions,
+:global([data-block-align='left']) .hero .actions {
+  justify-content: flex-start;
+}
+
+.hero[data-align='center'],
+:global([data-block-align='center']) .hero {
+  justify-items: center;
+  text-align: center;
+}
+
+.hero[data-align='center'] .heroImage,
+:global([data-block-align='center']) .hero .heroImage {
+  justify-self: center;
+  margin-inline: auto;
+}
+
+.hero[data-align='center'] .actions,
+:global([data-block-align='center']) .hero .actions {
+  justify-content: center;
+}
+
+.hero[data-align='right'],
+:global([data-block-align='right']) .hero {
+  justify-items: end;
+  text-align: end;
+}
+
+.hero[data-align='right'] .heroImage,
+:global([data-block-align='right']) .hero .heroImage {
+  justify-self: end;
+  margin-inline: auto 0;
+}
+
+.hero[data-align='right'] .actions,
+:global([data-block-align='right']) .hero .actions {
+  justify-content: flex-end;
 }
 
 .eyebrow {
@@ -64,11 +138,23 @@
   list-style: none;
 }
 
+:global([data-block-align='center']) .actions {
+  justify-content: center;
+}
+
+:global([data-block-align='right']) .actions {
+  justify-content: flex-end;
+}
+
 .actionButton,
 .actionLink {
   display: inline-flex;
   align-items: center;
+  max-width: 100%;
+  min-width: 0;
   min-height: 2.75rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-weight: 600;
   text-decoration: none;
 }
@@ -97,6 +183,8 @@
 
 .entry {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 0.25rem;
 }
 
@@ -145,6 +233,9 @@
 }
 
 .tag {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--block-text) 18%, transparent);
@@ -164,6 +255,213 @@
   gap: 1.5rem;
 }
 
+/* Modern setup */
+.hero[data-setup='modern'] {
+  gap: 1.25rem;
+}
+
+.hero[data-setup='modern'] .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--block-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--block-accent) 24%, transparent);
+  color: var(--block-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.hero[data-setup='modern'] .heroImage {
+  order: -1;
+  max-width: 18rem;
+  aspect-ratio: 1 / 1;
+  border-radius: 1.5rem;
+  border: 1.5px solid color-mix(in srgb, var(--block-accent) 25%, transparent);
+  box-shadow: 0 16px 36px -10px color-mix(in srgb, var(--block-text) 20%, transparent);
+}
+
+.hero[data-setup='modern'] .lead {
+  font-size: 1.15rem;
+  line-height: 1.7;
+  color: color-mix(in srgb, var(--block-text) 85%, transparent);
+}
+
+.hero[data-setup='modern'] .actionButton {
+  border-radius: 9999px;
+  padding-inline: 1.75rem;
+  font-weight: 600;
+  box-shadow: 0 6px 18px -2px color-mix(in srgb, var(--block-accent) 35%, transparent);
+}
+
+.hero[data-setup='modern'][data-spacing='compact'] {
+  gap: 0.75rem;
+}
+
+.hero[data-setup='modern'][data-spacing='comfortable'] {
+  gap: 1.25rem;
+}
+
+.hero[data-setup='modern'][data-spacing='spacious'] {
+  gap: 2rem;
+}
+
+/* Artsy setup */
+.hero[data-setup='artsy'] {
+  gap: 1.5rem;
+  position: relative;
+}
+
+.hero[data-setup='artsy'] .eyebrow {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--block-accent);
+  border-bottom: 2px dashed color-mix(in srgb, var(--block-accent) 60%, transparent);
+  padding-bottom: 0.25rem;
+  width: fit-content;
+}
+
+.hero[data-setup='artsy'] .heroImage {
+  order: -1;
+  max-width: 17rem;
+  aspect-ratio: 1 / 1;
+  border-radius: 2.5rem 0.5rem 2.5rem 0.5rem;
+  border: 2px solid var(--block-text);
+  box-shadow: 8px 8px 0 var(--block-accent);
+  transform: rotate(-1.5deg);
+}
+
+.hero[data-setup='artsy'][data-align='right'] .heroImage,
+:global([data-block-align='right']) .hero[data-setup='artsy'] .heroImage {
+  transform: rotate(1.5deg);
+}
+
+.hero[data-setup='artsy'] .lead {
+  font-size: 1.2rem;
+  line-height: 1.7;
+  font-style: italic;
+  color: var(--block-text);
+}
+
+.hero[data-setup='artsy'] .actionButton {
+  border-radius: 0;
+  border: 2px solid var(--block-text);
+  background: var(--block-accent);
+  color: var(--block-bg);
+  box-shadow: 4px 4px 0 var(--block-text);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.875rem;
+  padding-inline: 1.5rem;
+}
+
+.hero[data-setup='artsy'][data-spacing='compact'] {
+  gap: 1rem;
+}
+
+.hero[data-setup='artsy'][data-spacing='comfortable'] {
+  gap: 1.75rem;
+}
+
+.hero[data-setup='artsy'][data-spacing='spacious'] {
+  gap: 2.5rem;
+}
+
+/* Shared setups for the remaining portfolio blocks. These variants deliberately
+ * use the same visual language as the Hero instead of introducing new palettes. */
+:global([data-setup='modern']) h2 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+:global([data-setup='artsy']) h2 {
+  font-family: var(--block-font-heading);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+:global([data-setup='modern']) .projectCard {
+  border-radius: 1rem;
+  border-color: color-mix(in srgb, var(--block-accent) 20%, transparent);
+  box-shadow: 0 12px 28px -18px color-mix(in srgb, var(--block-text) 35%, transparent);
+}
+
+:global([data-setup='artsy']) .projectCard {
+  border-radius: 0.25rem 1.5rem 0.25rem 1.5rem;
+  border: 2px solid var(--block-text);
+  box-shadow: 6px 6px 0 var(--block-accent);
+}
+
+:global([data-setup='modern']) .tag {
+  border-color: color-mix(in srgb, var(--block-accent) 24%, transparent);
+  background: color-mix(in srgb, var(--block-accent) 8%, transparent);
+  color: var(--block-accent);
+  font-weight: 600;
+}
+
+:global([data-setup='artsy']) .tag {
+  border-radius: 0.25rem;
+  border-style: dashed;
+  border-color: var(--block-accent);
+  transform: rotate(-1deg);
+}
+
+:global([data-setup='modern']) .entry {
+  padding: 1rem;
+  border-inline-start: 3px solid var(--block-accent);
+  background: color-mix(in srgb, var(--block-accent) 5%, transparent);
+}
+
+:global([data-setup='artsy']) .entry,
+:global([data-setup='artsy']) .contactList {
+  padding-block: 0.75rem;
+  border-block: 1px dashed color-mix(in srgb, var(--block-accent) 55%, transparent);
+}
+
+:global([data-setup='modern']) .actionButton,
+:global([data-setup='modern']) .actionLink {
+  border-radius: 9999px;
+}
+
+:global([data-setup='artsy']) .actionButton {
+  border-radius: 0;
+  border: 2px solid var(--block-text);
+  box-shadow: 4px 4px 0 var(--block-text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+:global([data-setup='modern']) .portrait {
+  border-radius: 1.25rem;
+  border: 2px solid color-mix(in srgb, var(--block-accent) 25%, transparent);
+}
+
+:global([data-setup='artsy']) .portrait {
+  border-radius: 2rem 0.5rem 2rem 0.5rem;
+  border: 2px solid var(--block-text);
+  box-shadow: 7px 7px 0 var(--block-accent);
+  transform: rotate(-1.5deg);
+}
+
+:global([data-setup='modern']) .footerLinks a {
+  text-decoration: none;
+}
+
+:global([data-setup='artsy']) .footerLinks a {
+  font-style: italic;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--block-accent);
+  text-underline-offset: 0.2em;
+}
+
 .footerLinks {
   display: flex;
   flex-wrap: wrap;
@@ -181,6 +479,16 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.contact {
+  display: grid;
+  width: 100%;
+  gap: 1rem;
+}
+
+.contactList li {
+  width: 100%;
 }
 
 .contactLabel {
@@ -213,6 +521,8 @@
 
 .projectCard {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 0.5rem;
   align-content: start;
   padding: 1rem;
@@ -246,4 +556,259 @@
 
 .about > * {
   flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Default setup: a polished, balanced baseline for every information type. */
+:global([data-setup='default']) .about {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.8fr) minmax(0, 1.4fr);
+  gap: 2rem;
+}
+
+:global([data-setup='default']) .entries {
+  border-block-start: 1px solid color-mix(in srgb, var(--block-text) 12%, transparent);
+}
+
+:global([data-setup='default']) .entry {
+  padding-block: 1rem;
+  border-block-end: 1px solid color-mix(in srgb, var(--block-text) 12%, transparent);
+}
+
+:global([data-setup='default']) .projectCard {
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--block-bg) 96%, var(--block-text));
+}
+
+:global([data-setup='default']) .tags {
+  gap: 0.625rem;
+}
+
+/* Modern setup: asymmetric, energetic compositions with strong visual rhythm. */
+:global([data-setup='modern']) .about {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(0, 1.2fr);
+  gap: 2.5rem;
+  align-items: center;
+}
+
+:global([data-setup='modern']) .entries {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+:global([data-setup='modern']) .entry:first-child:nth-last-child(odd) {
+  grid-column: 1 / -1;
+}
+
+:global([data-setup='modern']) .projectGrid {
+  gap: 1rem;
+}
+
+:global([data-setup='modern']) .projectCard:nth-child(3n + 1) {
+  transform: translateY(-0.375rem);
+}
+
+:global([data-setup='modern']) .projectCard:nth-child(3n + 2) {
+  transform: translateY(0.375rem);
+}
+
+:global([data-setup='modern']) .tags {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.625rem;
+}
+
+:global([data-setup='modern']) .tag {
+  display: block;
+  text-align: center;
+}
+
+:global([data-setup='modern']) .contactList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.5rem;
+}
+
+:global([data-setup='modern']) .footerLinks {
+  justify-content: flex-end;
+}
+
+/* Artsy setup: editorial, expressive layouts that reveal personality immediately. */
+:global([data-setup='artsy']) .about {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.8fr) minmax(0, 1.35fr);
+  gap: 3rem;
+  align-items: center;
+}
+
+:global([data-setup='artsy']) .about::before {
+  position: absolute;
+  content: '';
+  width: 4rem;
+  height: 4rem;
+  inset: -1.25rem auto auto -0.75rem;
+  border: 2px dotted var(--block-accent);
+  border-radius: 50%;
+  opacity: 0.75;
+}
+
+:global([data-setup='artsy']) .prose {
+  padding: 1.25rem 0.25rem 1.25rem 1.5rem;
+  border-inline-start: 3px solid var(--block-accent);
+  transform: rotate(-0.35deg);
+}
+
+:global([data-setup='artsy']) .entries {
+  position: relative;
+  gap: 0.75rem;
+}
+
+:global([data-setup='artsy']) .entry:nth-child(odd) {
+  margin-inline-end: 12%;
+  transform: rotate(-0.35deg);
+}
+
+:global([data-setup='artsy']) .entry:nth-child(even) {
+  margin-inline-start: 12%;
+  transform: rotate(0.35deg);
+}
+
+:global([data-setup='artsy']) .projectGrid {
+  gap: 1.25rem;
+}
+
+:global([data-setup='artsy']) .projectGrid[data-columns='1'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:global([data-setup='artsy']) .projectGrid[data-columns='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:global([data-setup='artsy']) .projectGrid[data-columns='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+:global([data-setup='artsy']) .projectCard {
+  grid-column: auto;
+}
+
+:global([data-setup='artsy']) .projectCard:nth-child(odd) {
+  transform: rotate(-0.6deg);
+}
+
+:global([data-setup='artsy']) .projectCard:nth-child(even) {
+  transform: rotate(0.6deg);
+}
+
+:global([data-setup='artsy']) .tags {
+  gap: 0.75rem;
+}
+
+:global([data-setup='artsy']) .tag:nth-child(3n + 1) {
+  transform: rotate(-2deg);
+}
+
+:global([data-setup='artsy']) .tag:nth-child(3n + 2) {
+  transform: rotate(1deg);
+}
+
+:global([data-setup='artsy']) .contactList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+:global([data-setup='artsy']) .contactList li {
+  padding: 0.5rem 0.75rem;
+  border-block-end: 1px dashed var(--block-accent);
+}
+
+:global([data-setup='artsy']) .footerLinks {
+  gap: 1rem 1.5rem;
+}
+
+/* Spacing remains independent of setup and controls internal information density. */
+:global([data-block-spacing='compact']) .projectGrid,
+:global([data-block-spacing='compact']) .entries,
+:global([data-block-spacing='compact']) .tags,
+:global([data-block-spacing='compact']) .contactList,
+:global([data-block-spacing='compact']) .contact,
+:global([data-block-spacing='compact']) .about,
+:global([data-block-spacing='compact']) .footerLinks {
+  gap: 0.75rem;
+}
+
+:global([data-block-spacing='compact']) .contactList {
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
+}
+
+:global([data-block-spacing='comfortable']) .projectGrid,
+:global([data-block-spacing='comfortable']) .entries,
+:global([data-block-spacing='comfortable']) .tags,
+:global([data-block-spacing='comfortable']) .contactList,
+:global([data-block-spacing='comfortable']) .contact,
+:global([data-block-spacing='comfortable']) .about,
+:global([data-block-spacing='comfortable']) .footerLinks {
+  gap: 1.25rem;
+}
+
+:global([data-block-spacing='comfortable']) .contactList {
+  column-gap: 1.25rem;
+  row-gap: 1rem;
+}
+
+:global([data-block-spacing='spacious']) .projectGrid,
+:global([data-block-spacing='spacious']) .entries,
+:global([data-block-spacing='spacious']) .tags,
+:global([data-block-spacing='spacious']) .contactList,
+:global([data-block-spacing='spacious']) .contact,
+:global([data-block-spacing='spacious']) .about,
+:global([data-block-spacing='spacious']) .footerLinks {
+  gap: 2rem;
+}
+
+:global([data-block-spacing='spacious']) .contactList {
+  column-gap: 2.5rem;
+  row-gap: 1.75rem;
+}
+
+:global([data-block-spacing='spacious']) .contactList li {
+  padding-block: 0.75rem;
+}
+
+@media (max-width: 44rem) {
+  :global([data-setup='default']) .about,
+  :global([data-setup='modern']) .about,
+  :global([data-setup='artsy']) .about {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  :global([data-setup='modern']) .entries,
+  :global([data-setup='modern']) .contactList,
+  :global([data-setup='artsy']) .contactList {
+    grid-template-columns: 1fr;
+  }
+
+  :global([data-setup='modern']) .entry:first-child:nth-last-child(odd) {
+    grid-column: auto;
+  }
+
+  :global([data-setup='artsy']) .entry:nth-child(odd),
+  :global([data-setup='artsy']) .entry:nth-child(even) {
+    margin-inline: 0;
+  }
+
+  :global([data-setup='artsy']) .projectGrid {
+    grid-template-columns: 1fr;
+  }
+
+  :global([data-setup='artsy']) .projectCard {
+    transform: none;
+  }
 }

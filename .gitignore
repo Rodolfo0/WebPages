@@ -52,3 +52,4 @@ next-env.d.ts
 # local AI assistant prompts and context
 .continue
 .continue/
+.github/agents/local-gemma-worker.agent.md

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineBlock } from '../../domain/block-definition';
 import {
   blockAlignmentSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -27,6 +28,7 @@ const footerLinkSchema = z.strictObject({
 const MAX_FOOTER_LINKS = 6;
 
 export const footerPropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   heading: shortTextSchema(60, 'El título accesible'),
   copyright: shortTextSchema(120, 'El texto de copyright'),
   links: z
@@ -47,6 +49,7 @@ export const footerBlock = defineBlock<FooterProps>({
   description: 'Copyright y enlaces finales del sitio.',
   propsSchema: footerPropsSchema,
   defaultProps: footerPropsSchema.parse({
+    setup: 'default',
     heading: 'Pie de página',
     copyright: '© 2026 Alex Rivera. Todos los derechos reservados.',
     links: [
@@ -62,12 +65,14 @@ export const footerBlock = defineBlock<FooterProps>({
   reactComponent: ({ props, blockId, theme }) => (
     <BlockSection
       align={props.align}
+      spacing={props.spacing}
       theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
       anchor={props.anchor}
       headingId={`${blockId}-heading`}
       heading={props.heading}
       headingLevel={2}
       hidden={props.hidden}
+      data-setup={props.setup}
     >
       <nav aria-label={props.heading}>
         <ul className={styles.footerLinks}>

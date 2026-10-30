@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineBlock } from '../../domain/block-definition';
 import {
   blockAlignmentSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -22,6 +23,7 @@ const skillSchema = shortTextSchema(40, 'La habilidad');
 const MAX_SKILLS = 24;
 
 export const skillsPropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   heading: shortTextSchema(60, 'El título'),
   items: z.array(skillSchema).max(MAX_SKILLS, `Puedes añadir hasta ${MAX_SKILLS} habilidades.`),
   align: blockAlignmentSchema.default('left'),
@@ -39,6 +41,7 @@ export const skillsBlock = defineBlock<SkillsProps>({
   description: 'Una lista breve de herramientas y capacidades.',
   propsSchema: skillsPropsSchema,
   defaultProps: skillsPropsSchema.parse({
+    setup: 'default',
     heading: 'Habilidades',
     items: [
       'Diseño de interfaces',
@@ -58,12 +61,14 @@ export const skillsBlock = defineBlock<SkillsProps>({
   reactComponent: ({ props, blockId, theme }) => (
     <BlockSection
       align={props.align}
+      spacing={props.spacing}
       theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
       anchor={props.anchor}
       headingId={`${blockId}-heading`}
       heading={props.heading}
       headingLevel={2}
       hidden={props.hidden}
+      data-setup={props.setup}
     >
       <BlockTagList items={props.items} />
     </BlockSection>

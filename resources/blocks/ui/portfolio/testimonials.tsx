@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineBlock } from '../../domain/block-definition';
 import {
   blockAlignmentSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -27,6 +28,7 @@ const testimonialSchema = z.strictObject({
 const MAX_TESTIMONIALS = 6;
 
 export const testimonialsPropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   heading: shortTextSchema(60, 'El título'),
   entries: z
     .array(testimonialSchema)
@@ -46,6 +48,7 @@ export const testimonialsBlock = defineBlock<TestimonialsProps>({
   description: 'Opiniones de personas con las que has trabajado. Opcional.',
   propsSchema: testimonialsPropsSchema,
   defaultProps: testimonialsPropsSchema.parse({
+    setup: 'default',
     heading: 'Lo que dicen de mi trabajo',
     entries: [
       {
@@ -68,12 +71,14 @@ export const testimonialsBlock = defineBlock<TestimonialsProps>({
   reactComponent: ({ props, blockId, theme }) => (
     <BlockSection
       align={props.align}
+      spacing={props.spacing}
       theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
       anchor={props.anchor}
       headingId={`${blockId}-heading`}
       heading={props.heading}
       headingLevel={2}
       hidden={props.hidden}
+      data-setup={props.setup}
     >
       <ul className={styles.entries}>
         {props.entries.map((entry, index) => (

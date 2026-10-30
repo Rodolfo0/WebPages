@@ -3,6 +3,7 @@ import { defineBlock } from '../../domain/block-definition';
 import {
   altTextSchema,
   blockAlignmentSchema,
+  blockSetupSchema,
   blockSpacingSchema,
   hiddenSchema,
   anchorSchema,
@@ -34,6 +35,7 @@ const projectEntrySchema = z.strictObject({
 const MAX_PROJECT_ENTRIES = 9;
 
 export const projectsPropsSchema = z.strictObject({
+  setup: blockSetupSchema.default('default'),
   heading: shortTextSchema(60, 'El título'),
   entries: z
     .array(projectEntrySchema)
@@ -54,6 +56,7 @@ export const projectsBlock = defineBlock<ProjectsProps>({
   description: 'Proyectos destacados con imagen opcional y enlace.',
   propsSchema: projectsPropsSchema,
   defaultProps: projectsPropsSchema.parse({
+    setup: 'default',
     heading: 'Proyectos destacados',
     entries: [
       {
@@ -84,12 +87,14 @@ export const projectsBlock = defineBlock<ProjectsProps>({
   reactComponent: ({ props, blockId, theme }) => (
     <BlockSection
       align={props.align}
+      spacing={props.spacing}
       theme={props.accentColor ? { ...theme, colors: { ...theme.colors, accent: props.accentColor } } : theme}
       anchor={props.anchor}
       headingId={`${blockId}-heading`}
       heading={props.heading}
       headingLevel={2}
       hidden={props.hidden}
+      data-setup={props.setup}
     >
       <ul className={styles.projectGrid} data-columns={props.columns}>
         {props.entries.map((entry, index) => (

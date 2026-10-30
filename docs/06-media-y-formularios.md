@@ -31,6 +31,12 @@ Definir antes de implementar:
 
 La primera versión puede evitar transformaciones complejas y usar URLs directas. La optimización de imágenes se puede añadir después de medir el tamaño real de los assets.
 
+### Base técnica actual (Issue 16)
+
+La aplicación expone `GET/POST /api/projects/{projectId}/assets` para listar y subir assets privados y `GET /api/assets/{assetId}` para entregar una imagen publicada o privada autorizada. Los nombres finales de R2 se generan con el ID de proyecto y el ID aleatorio del asset; el nombre original solo se conserva como metadata.
+
+La base inicial acepta JPEG, PNG y WebP de hasta 10 MB. Esta política temporal se centraliza en el módulo de dominio de assets y no sustituye la configuración final de cuotas, cuotas por usuario, dimensiones ni sanitización/SVG que se definirá en una issue posterior.
+
 ## Formulario público
 
 El bloque de contacto debe enviar mensajes a una ruta pública asociada al proyecto publicado. La ruta debe:
