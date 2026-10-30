@@ -3,7 +3,7 @@
 import React from 'react';
 import '@testing-library/jest-dom/vitest';
 import { MantineProvider } from '@mantine/core';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPortfolioTemplate } from '../../../projects/domain/portfolio-template';
 import ProjectEditor from '../../ui/project-editor';
@@ -93,6 +93,158 @@ describe('ProjectEditor properties panel', () => {
     fireEvent.change(headline, { target: { value: 'Live responsive headline' } });
 
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('moves a focused section with ArrowUp and ArrowDown in the section list', async () => {
+    renderEditor();
+
+    const sections = await screen.findByRole('navigation', { name: 'Secciones del sitio' });
+    const sectionButtons = () => within(sections).getAllByRole('button', { name: /Seleccionar sección/ });
+    const initialTitles = sectionButtons().map((button) => button.textContent?.replace(/^\d+\.\s*/, ''));
+    const secondSection = sectionButtons()[1];
+
+    fireEvent.keyDown(secondSection, { key: 'ArrowUp' });
+    await waitFor(() => {
+      expect(sectionButtons()[0]).toHaveTextContent(initialTitles[1] ?? '');
+      expect(sectionButtons()[1]).toHaveTextContent(initialTitles[0] ?? '');
+    });
+
+    fireEvent.keyDown(sectionButtons()[0], { key: 'ArrowDown' });
+    await waitFor(() => {
+      expect(sectionButtons()[0]).toHaveTextContent(initialTitles[0] ?? '');
+      expect(sectionButtons()[1]).toHaveTextContent(initialTitles[1] ?? '');
+    });
+  });
+
+  it('moves a focused preview block with ArrowUp and ArrowDown without scrolling the page', async () => {
+    renderEditor();
+
+    const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' }).catch(() => screen.getByLabelText('Canvas del sitio'));
+    const previewBlocks = () => within(canvas).getAllByRole('button');
+    const initialTitles = previewBlocks().map((button) => button.getAttribute('aria-label')?.split(': ').slice(1).join(': '));
+    const secondBlock = previewBlocks()[1];
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    scrollIntoView.mockClear();
+
+    fireEvent.keyDown(secondBlock, { key: 'ArrowUp' });
+    await waitFor(() => {
+      expect(previewBlocks()[0]).toHaveAttribute('aria-label', expect.stringContaining(initialTitles[1] ?? ''));
+      expect(previewBlocks()[1]).toHaveAttribute('aria-label', expect.stringContaining(initialTitles[0] ?? ''));
+    });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(previewBlocks()[0], { key: 'ArrowDown' });
+    await waitFor(() => {
+      expect(previewBlocks()[0]).toHaveAttribute('aria-label', expect.stringContaining(initialTitles[0] ?? ''));
+      expect(previewBlocks()[1]).toHaveAttribute('aria-label', expect.stringContaining(initialTitles[1] ?? ''));
+    });
+  });
+
+  it('opens the delete confirmation when Delete is pressed on a section row', async () => {
+    renderEditor();
+
+    const sections = await screen.findByRole('navigation', { name: 'Secciones del sitio' });
+    const sectionButtons = within(sections).getAllByRole('button', { name: /Seleccionar sección/ });
+    fireEvent.keyDown(sectionButtons[0], { key: 'Delete' });
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('¿Seguro que quieres eliminar Presentación?');
+    expect(within(sections).getAllByRole('button', { name: /Seleccionar sección/ })).toHaveLength(8);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar sección' }));
+    await waitFor(() => {
+      expect(within(sections).getAllByRole('button', { name: /Seleccionar sección/ })).toHaveLength(7);
+    });
+  });
+
+  it('opens the delete confirmation when Delete is pressed on a focused preview block', async () => {
+    renderEditor();
+
+    const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' });
+    const previewBlock = within(canvas).getAllByRole('button')[1];
+    fireEvent.keyDown(previewBlock, { key: 'Del' });
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('¿Seguro que quieres eliminar Sobre mí?');
+  });
+
+  it('opens the delete confirmation when Backspace is pressed on a section row', async () => {
+    renderEditor();
+
+    const sections = await screen.findByRole('navigation', { name: 'Secciones del sitio' });
+    fireEvent.keyDown(within(sections).getAllByRole('button', { name: /Seleccionar sección/ })[0], { key: 'Backspace' });
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('¿Seguro que quieres eliminar Presentación?');
+  });
+
+  it('duplicates the focused section with Shift+D', async () => {
+    renderEditor();
+
+    const sections = await screen.findByRole('navigation', { name: 'Secciones del sitio' });
+    const sectionButtons = () => within(sections).getAllByRole('button', { name: /Seleccionar sección/ });
+    const originalTitle = sectionButtons()[1].textContent?.replace(/^\d+\.\s*/, '');
+
+    fireEvent.keyDown(sectionButtons()[1], { key: 'D', shiftKey: true });
+    await waitFor(() => {
+      expect(sectionButtons()).toHaveLength(9);
+      expect(sectionButtons()[2]).toHaveTextContent(originalTitle ?? '');
+    });
+  });
+
+  it('duplicates a focused preview block with Shift+D', async () => {
+    renderEditor();
+
+    const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' });
+    const previewBlocks = () => within(canvas).getAllByRole('button');
+    const originalTitle = previewBlocks()[1].getAttribute('aria-label')?.split(': ').slice(1).join(': ');
+
+    fireEvent.keyDown(previewBlocks()[1], { key: 'D', shiftKey: true });
+    await waitFor(() => {
+      expect(previewBlocks()).toHaveLength(9);
+      expect(previewBlocks()[2]).toHaveAttribute('aria-label', expect.stringContaining(originalTitle ?? ''));
+    });
+  });
+
+  it('reorders blocks by dragging section rows', async () => {
+    renderEditor();
+
+    const sections = await screen.findByRole('navigation', { name: 'Secciones del sitio' });
+    const sectionButtons = within(sections).getAllByRole('button', { name: /Seleccionar sección/ });
+    const firstRow = sectionButtons[0].parentElement;
+    const draggedRow = sectionButtons[2].parentElement;
+    const firstTitle = sectionButtons[0].textContent?.replace(/^\d+\.\s*/, '');
+    const draggedTitle = sectionButtons[2].textContent?.replace(/^\d+\.\s*/, '');
+
+    expect(firstRow).toHaveAttribute('draggable', 'true');
+    fireEvent.dragStart(draggedRow!, { dataTransfer: { effectAllowed: 'none', setData: vi.fn() } });
+    fireEvent.dragOver(draggedRow!, { dataTransfer: { dropEffect: 'none' } });
+    expect(sections.querySelector('[class*="dropPlaceholder"]')).not.toBeInTheDocument();
+    fireEvent.dragOver(firstRow!, { clientY: 1, dataTransfer: { dropEffect: 'none' } });
+    expect(sections.querySelector('[class*="dropPlaceholder"]')).toHaveAttribute('data-position', 'after');
+    fireEvent.drop(firstRow!, { clientY: 1, dataTransfer: { dropEffect: 'none' } });
+
+    await waitFor(() => {
+      expect(within(sections).getAllByRole('button', { name: /Seleccionar sección/ })[0]).toHaveTextContent(firstTitle ?? '');
+      expect(within(sections).getAllByRole('button', { name: /Seleccionar sección/ })[1]).toHaveTextContent(draggedTitle ?? '');
+    });
+  });
+
+  it('reorders preview blocks when dropped onto the visible placeholder', async () => {
+    renderEditor();
+
+    const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' });
+    const previewBlocks = () => within(canvas).getAllByRole('button');
+    const firstTitle = previewBlocks()[0].getAttribute('aria-label')?.split(': ').slice(1).join(': ');
+    const draggedTitle = previewBlocks()[2].getAttribute('aria-label')?.split(': ').slice(1).join(': ');
+
+    fireEvent.dragStart(previewBlocks()[2], { dataTransfer: { effectAllowed: 'none', setData: vi.fn() } });
+    fireEvent.dragOver(previewBlocks()[0], { dataTransfer: { dropEffect: 'none' } });
+    const placeholder = canvas.querySelector('[class*="dropPlaceholder"][data-position="after"]');
+    expect(placeholder).toBeInTheDocument();
+    fireEvent.drop(placeholder!, { dataTransfer: { dropEffect: 'none' } });
+
+    await waitFor(() => {
+      expect(previewBlocks()[0]).toHaveAttribute('aria-label', expect.stringContaining(firstTitle ?? ''));
+      expect(previewBlocks()[1]).toHaveAttribute('aria-label', expect.stringContaining(draggedTitle ?? ''));
+    });
   });
 
   it('clears a save failure when the text returns to the last saved value', async () => {
