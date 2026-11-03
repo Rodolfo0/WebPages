@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createPortfolioTemplate } from '../../../projects/domain/portfolio-template';
 import {
+  deleteBlockFromDocument,
+  duplicateBlockInDocument,
+  moveBlockInDocument,
   BlockPropsValidationError,
   updateBlockProps,
 } from '../../domain/document';
@@ -122,5 +125,41 @@ describe('updateBlockProps', () => {
     expect(() => updateBlockProps(document, page.id, hero.id, {
       setup: 'futuristic',
     })).toThrow(BlockPropsValidationError);
+  });
+});
+
+describe('block composition actions', () => {
+  let document: ReturnType<typeof createPortfolioTemplate>;
+  let page: ReturnType<typeof createPortfolioTemplate>['pages'][number];
+
+  beforeEach(() => {
+    document = createPortfolioTemplate('Alex Rivera', 'alex-rivera');
+    page = document.pages[0];
+  });
+
+  it('moves blocks up and down without changing ids or mutating the source document', () => {
+    const secondBlock = page.blocks[1];
+    const movedUp = moveBlockInDocument(document, page.id, secondBlock.id, 0);
+    expect(movedUp.pages[0].blocks[0].id).toBe(secondBlock.id);
+    expect(page.blocks[0].id).not.toBe(secondBlock.id);
+    const movedDown = moveBlockInDocument(movedUp, page.id, secondBlock.id, 1);
+    expect(movedDown.pages[0].blocks[1].id).toBe(secondBlock.id);
+  });
+
+  it('duplicates a block with a fresh id and identical props', () => {
+    const source = page.blocks[0];
+    const result = duplicateBlockInDocument(document, page.id, source.id);
+    expect(result.document.pages[0].blocks[1].id).toBe(result.blockId);
+    expect(result.blockId).not.toBe(source.id);
+    expect(result.document.pages[0].blocks[1].props).toEqual(source.props);
+    expect(page.blocks).toHaveLength(result.document.pages[0].blocks.length - 1);
+  });
+
+  it('deletes a block and retains the other blocks', () => {
+    const removedId = page.blocks[0].id;
+    const result = deleteBlockFromDocument(document, page.id, removedId);
+    expect(result.pages[0].blocks.some((block) => block.id === removedId)).toBe(false);
+    expect(result.pages[0].blocks).toHaveLength(page.blocks.length - 1);
+    expect(page.blocks).toHaveLength(result.pages[0].blocks.length + 1);
   });
 });

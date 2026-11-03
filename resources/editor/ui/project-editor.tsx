@@ -15,13 +15,17 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { ArrowDown, ArrowUp, Copy, Trash2 } from 'lucide-react';
 import { portfolioBlockRegistry, requireBlock } from '../../blocks';
 import type { BlockProps, JsonValue, SiteDocument } from '../../site-document';
 import {
   addBlockToDocument,
   BlockPropsValidationError,
+  deleteBlockFromDocument,
+  duplicateBlockInDocument,
+  moveBlockInDocument,
   updateBlockProps,
 } from '../domain/document';
 import styles from './editor.module.css';
@@ -51,6 +55,8 @@ type BlockSelection = {
   blockId: string;
 };
 
+type DropTarget = BlockSelection & { position: 'before' | 'after' };
+
 function isSelected(selection: BlockSelection | null, pageId: string, blockId: string) {
   return selection !== null && selection.pageId === pageId && selection.blockId === blockId;
 }
@@ -67,6 +73,14 @@ function CanvasBlock({
   selected,
   onSelect,
   registerFrame,
+  draggable,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  onMove,
+  onRequestDelete,
+  onDuplicate,
 }: {
   block: SiteDocument['pages'][number]['blocks'][number];
   blockIndex: number;
@@ -75,11 +89,37 @@ function CanvasBlock({
   selected: boolean;
   onSelect: (selection: BlockSelection) => void;
   registerFrame: (selection: BlockSelection, frame: HTMLDivElement | null) => void;
+  draggable: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: (event: React.DragEvent<HTMLDivElement>, selection: BlockSelection) => void;
+  onDrop: (event: React.DragEvent<HTMLDivElement>, selection: BlockSelection) => void;
+  onMove: (selection: BlockSelection, targetIndex: number) => void;
+  onRequestDelete: (selection: BlockSelection) => void;
+  onDuplicate: (selection: BlockSelection) => void;
 }) {
   const definition = requireBlock(portfolioBlockRegistry, block.type);
   const BlockRenderer = definition.reactComponent;
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.shiftKey && event.key.toLowerCase() === 'd') {
+      event.preventDefault();
+      onSelect({ pageId, blockId: block.id });
+      onDuplicate({ pageId, blockId: block.id });
+      return;
+    }
+    if (event.key === 'Delete' || event.key === 'Del' || event.key === 'Backspace') {
+      event.preventDefault();
+      onSelect({ pageId, blockId: block.id });
+      onRequestDelete({ pageId, blockId: block.id });
+      return;
+    }
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      onSelect({ pageId, blockId: block.id });
+      onMove({ pageId, blockId: block.id }, blockIndex + (event.key === 'ArrowUp' ? -1 : 1));
+      return;
+    }
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     onSelect({ pageId, blockId: block.id });
@@ -93,9 +133,14 @@ function CanvasBlock({
       aria-pressed={selected}
       data-selected={selected}
       className={styles.blockFrame}
+      draggable={draggable}
       ref={(frame) => registerFrame({ pageId, blockId: block.id }, frame)}
       onClick={() => onSelect({ pageId, blockId: block.id })}
       onKeyDown={handleKeyDown}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={(event) => onDragOver(event, { pageId, blockId: block.id })}
+      onDrop={(event) => onDrop(event, { pageId, blockId: block.id })}
     >
       <div className={styles.renderedBlock} aria-hidden="true" inert>
         <BlockRenderer blockId={block.id} theme={theme} props={block.props} />
@@ -112,6 +157,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [editorData, setEditorData] = useState<EditorData | null>(null);
   const [selection, setSelection] = useState<BlockSelection | null>(null);
   const [catalogOpened, setCatalogOpened] = useState(false);
+  const [blockPendingDelete, setBlockPendingDelete] = useState<{ pageId: string; blockId: string; label: string } | null>(null);
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogError, setCatalogError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -122,9 +168,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [saveError, setSaveError] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [draggedBlock, setDraggedBlock] = useState<BlockSelection | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const lastSavedDraft = useRef('');
   const saveRevision = useRef(0);
   const canvasBlockFrames = useRef(new Map<string, HTMLDivElement>());
+  const canvasViewportRef = useRef<HTMLDivElement | null>(null);
+  const skipSelectionScroll = useRef(false);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const sectionsPanelRef = useRef<HTMLDivElement | null>(null);
 
@@ -535,6 +585,123 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     }
   }
 
+  function reorderBlock(pageId: string, blockId: string, targetIndex: number) {
+    if (!editorData?.project.canEdit) return;
+    const page = editorData.draftDocument.pages.find((candidate) => candidate.id === pageId);
+    const currentIndex = page?.blocks.findIndex((block) => block.id === blockId) ?? -1;
+    if (!page || currentIndex < 0 || targetIndex < 0 || targetIndex >= page.blocks.length || targetIndex === currentIndex) return;
+    skipSelectionScroll.current = !isSelected(selection, pageId, blockId);
+    setEditorData({ ...editorData, draftDocument: moveBlockInDocument(editorData.draftDocument, pageId, blockId, targetIndex) });
+  }
+
+  function duplicateBlock(pageId: string, blockId: string) {
+    if (!editorData?.project.canEdit) return;
+    const result = duplicateBlockInDocument(editorData.draftDocument, pageId, blockId);
+    setEditorData({ ...editorData, draftDocument: result.document });
+    selectBlock({ pageId, blockId: result.blockId });
+  }
+
+  function deleteBlock(pageId: string, blockId: string) {
+    if (!editorData?.project.canEdit) return;
+    const page = editorData.draftDocument.pages.find((candidate) => candidate.id === pageId);
+    if (!page) return;
+    const index = page.blocks.findIndex((block) => block.id === blockId);
+    const nextDocument = deleteBlockFromDocument(editorData.draftDocument, pageId, blockId);
+    setEditorData({ ...editorData, draftDocument: nextDocument });
+    if (selection?.pageId === pageId && selection.blockId === blockId) {
+      const nextBlock = page.blocks[Math.min(index, page.blocks.length - 2)] ?? page.blocks[index + 1];
+      if (nextBlock) selectBlock({ pageId, blockId: nextBlock.id });
+      else { setSelection(null); setPropertyDraft(null); setPropertyErrors({}); }
+    }
+  }
+
+  function requestDeleteBlock(pageId: string, blockId: string) {
+    if (!editorData?.project.canEdit) return;
+    const block = editorData.draftDocument.pages
+      .find((page) => page.id === pageId)?.blocks.find((candidate) => candidate.id === blockId);
+    if (!block) return;
+    setBlockPendingDelete({ pageId, blockId, label: requireBlock(portfolioBlockRegistry, block.type).label });
+  }
+
+  function handleBlockDragOver(event: React.DragEvent<HTMLElement>, target: BlockSelection) {
+    if (!draggedBlock || draggedBlock.pageId !== target.pageId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    scrollCanvasDuringDrag(event);
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+    setDropTarget((current) => current?.pageId === target.pageId && current.blockId === target.blockId && current.position === position
+      ? current
+      : { ...target, position });
+  }
+
+  function scrollCanvasDuringDrag(event: React.DragEvent<HTMLElement>) {
+    const viewport = canvasViewportRef.current;
+    if (!viewport || !viewport.contains(event.currentTarget)) return;
+
+    const bounds = viewport.getBoundingClientRect();
+    const edgeZone = Math.min(200, Math.max(96, bounds.height * 0.24));
+    const pointerY = event.clientY;
+    let direction = 0;
+    let proximity = 0;
+
+    if (pointerY < bounds.top + edgeZone) {
+      direction = -1;
+      proximity = Math.min(1, Math.max(0, (bounds.top + edgeZone - pointerY) / edgeZone));
+    } else if (pointerY > bounds.bottom - edgeZone) {
+      direction = 1;
+      proximity = Math.min(1, Math.max(0, (pointerY - (bounds.bottom - edgeZone)) / edgeZone));
+    }
+
+    if (direction !== 0 && proximity > 0) {
+      viewport.scrollTop += direction * Math.ceil(3 + 22 * proximity ** 2);
+    }
+  }
+
+  function dropBlock(event: React.DragEvent<HTMLElement>, target: BlockSelection, positionOverride?: DropTarget['position']) {
+    event.preventDefault();
+    if (!draggedBlock || !dropTarget || draggedBlock.pageId !== target.pageId || !editorData) return;
+    const page = editorData.draftDocument.pages.find((candidate) => candidate.id === target.pageId);
+    const sourceIndex = page?.blocks.findIndex((block) => block.id === draggedBlock.blockId) ?? -1;
+    const targetIndex = page?.blocks.findIndex((block) => block.id === target.blockId) ?? -1;
+    if (sourceIndex >= 0 && targetIndex >= 0) {
+      const position = positionOverride ?? dropTarget.position;
+      let destinationIndex = targetIndex + (position === 'after' ? 1 : 0);
+      if (sourceIndex < destinationIndex) destinationIndex -= 1;
+      reorderBlock(target.pageId, draggedBlock.blockId, destinationIndex);
+    }
+    setDraggedBlock(null);
+    setDropTarget(null);
+  }
+
+  function dropPlaceholder(pageId: string, blockId: string, position: DropTarget['position']) {
+    if (!draggedBlock || draggedBlock.pageId !== pageId) return null;
+    const page = editorData?.draftDocument.pages.find((candidate) => candidate.id === pageId);
+    const sourceIndex = page?.blocks.findIndex((block) => block.id === draggedBlock.blockId) ?? -1;
+    const targetIndex = page?.blocks.findIndex((block) => block.id === blockId) ?? -1;
+    let destinationIndex = targetIndex + (position === 'after' ? 1 : 0);
+    if (sourceIndex < destinationIndex) destinationIndex -= 1;
+    const wouldMove = sourceIndex >= 0 && targetIndex >= 0 && destinationIndex !== sourceIndex;
+    return wouldMove && dropTarget?.pageId === pageId && dropTarget.blockId === blockId && dropTarget.position === position
+      ? <div
+          className={styles.dropPlaceholder}
+          data-position={position}
+          aria-hidden="true"
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.dataTransfer.dropEffect = 'move';
+            scrollCanvasDuringDrag(event);
+            setDropTarget({ pageId, blockId, position });
+          }}
+          onDrop={(event) => {
+            event.stopPropagation();
+            dropBlock(event, { pageId, blockId }, position);
+          }}
+        />
+      : null;
+  }
+
   const normalizedQuery = catalogSearch
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -567,6 +734,10 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     if (!selection) return;
+    if (skipSelectionScroll.current) {
+      skipSelectionScroll.current = false;
+      return;
+    }
     canvasBlockFrames.current
       .get(selectionKey(selection))
       ?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
@@ -684,12 +855,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                       {editorData.project.canEdit ? 'Editable' : 'Solo lectura'}
                     </Badge>
                   </div>
-                  <div className={styles.canvasViewport}>
+                  <div ref={canvasViewportRef} className={styles.canvasViewport}>
                     {editorData.draftDocument.pages.map((page) => (
                       <article key={page.id} className={styles.pageCanvas} aria-label={`Página ${page.path}`}>
                         {page.blocks.map((block, blockIndex) => (
+                          <Fragment key={block.id}>
+                          {dropPlaceholder(page.id, block.id, 'before')}
                           <CanvasBlock
-                            key={block.id}
                             block={block}
                             blockIndex={blockIndex}
                             pageId={page.id}
@@ -697,7 +869,17 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                             selected={isSelected(selection, page.id, block.id)}
                             onSelect={selectBlock}
                             registerFrame={registerCanvasBlock}
+                            draggable={editorData.project.canEdit}
+                            onDragStart={() => { setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
+                            onDragEnd={() => { setDraggedBlock(null); setDropTarget(null); }}
+                            onDragOver={handleBlockDragOver}
+                            onDrop={dropBlock}
+                            onMove={(blockSelection, targetIndex) => reorderBlock(blockSelection.pageId, blockSelection.blockId, targetIndex)}
+                            onRequestDelete={(blockSelection) => requestDeleteBlock(blockSelection.pageId, blockSelection.blockId)}
+                            onDuplicate={(blockSelection) => duplicateBlock(blockSelection.pageId, blockSelection.blockId)}
                           />
+                          {dropPlaceholder(page.id, block.id, 'after')}
+                          </Fragment>
                         ))}
                       </article>
                     ))}
@@ -707,13 +889,18 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             </section>
 
             <aside aria-label="Lista de secciones" className="order-first min-w-0 lg:order-none">
-              <Card ref={sectionsPanelRef} withBorder radius="lg" padding="md" className={styles.sectionsPanel}>
+              <Card ref={sectionsPanelRef} withBorder radius="lg" padding="sm" className={styles.sectionsPanel}>
                 <Stack gap="md">
                   <div>
                     <Title order={2}>Secciones</Title>
                     <Text size="sm" c="dimmed" mt={4}>
                       {editorData.project.canEdit ? 'Edición local' : 'Solo lectura'}
                     </Text>
+                    {editorData.project.canEdit && (
+                      <Text size="xs" c="dimmed" mt={4}>
+                        Teclado: enfoca una sección y usa ↑ / ↓ para moverla, Shift + D para duplicarla o Delete para eliminarla. También puedes recorrer los botones con Tab y activarlos con Enter.
+                      </Text>
+                    )}
                   </div>
                   <Button
                     fullWidth
@@ -737,16 +924,53 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                                 const definition = requireBlock(portfolioBlockRegistry, block.type);
                                 const selected = isSelected(selection, page.id, block.id);
                                 return (
-                                  <Button
+                                  <div
                                     key={block.id}
-                                    fullWidth
-                                    variant={selected ? 'filled' : 'default'}
-                                    aria-pressed={selected}
-                                    aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`}
-                                    onClick={() => selectBlock({ pageId: page.id, blockId: block.id })}
-                                  >
-                                    {blockIndex + 1}. {definition.label}
-                                  </Button>
+                                    className={styles.sectionRow}
+                                    data-selected={selected}
+                                    draggable={editorData.project.canEdit}
+                                    onDragStart={(event) => {
+                                      event.dataTransfer.effectAllowed = 'move';
+                                      event.dataTransfer.setData('text/plain', block.id);
+                                      setDraggedBlock({ pageId: page.id, blockId: block.id });
+                                      setDropTarget(null);
+                                    }}
+                                    onDragEnd={() => { setDraggedBlock(null); setDropTarget(null); }}
+                                    onDragOver={(event) => handleBlockDragOver(event, { pageId: page.id, blockId: block.id })}
+                                    onDrop={(event) => dropBlock(event, { pageId: page.id, blockId: block.id })}
+                                    onKeyDown={(event) => {
+                                    if (event.shiftKey && event.key.toLowerCase() === 'd') {
+                                      event.preventDefault();
+                                      selectBlock({ pageId: page.id, blockId: block.id });
+                                      duplicateBlock(page.id, block.id);
+                                      return;
+                                    }
+                                    if (event.key !== 'Delete' && event.key !== 'Del' && event.key !== 'Backspace') return;
+                                    event.preventDefault();
+                                    selectBlock({ pageId: page.id, blockId: block.id });
+                                    requestDeleteBlock(page.id, block.id);
+                                  }}>
+                                    {dropPlaceholder(page.id, block.id, 'before')}
+                                    <Button className={styles.sectionSelect} fullWidth variant={selected ? 'filled' : 'default'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
+                                      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                                      event.preventDefault();
+                                      selectBlock({ pageId: page.id, blockId: block.id });
+                                      reorderBlock(page.id, block.id, blockIndex + (event.key === 'ArrowUp' ? -1 : 1));
+                                    }}>
+                                      {blockIndex + 1}. {definition.label}
+                                    </Button>
+                                    <div className={styles.sectionActions}>
+                                      <div className={styles.moveActions}>
+                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Mover ${definition.label} arriba`} title={`Mover ${definition.label} arriba`} disabled={!editorData.project.canEdit || blockIndex === 0} onClick={() => reorderBlock(page.id, block.id, blockIndex - 1)}><ArrowUp size={18} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Mover ${definition.label} abajo`} title={`Mover ${definition.label} abajo`} disabled={!editorData.project.canEdit || blockIndex === page.blocks.length - 1} onClick={() => reorderBlock(page.id, block.id, blockIndex + 1)}><ArrowDown size={18} aria-hidden="true" /></Button>
+                                      </div>
+                                      <div className={styles.compositionActions}>
+                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Duplicar ${definition.label}`} title={`Duplicar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => duplicateBlock(page.id, block.id)}><Copy size={18} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="sm" color="red" variant="light" aria-label={`Eliminar ${definition.label}`} title={`Eliminar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => requestDeleteBlock(page.id, block.id)}><Trash2 size={18} aria-hidden="true" /></Button>
+                                      </div>
+                                    </div>
+                                    {dropPlaceholder(page.id, block.id, 'after')}
+                                  </div>
                                 );
                               })}
                             </Stack>
@@ -821,6 +1045,24 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
           {catalogBlocks.length === 0 && (
             <Text size="sm" c="dimmed">No encontramos bloques con esa búsqueda.</Text>
           )}
+        </Stack>
+      </Modal>
+      <Modal
+        opened={blockPendingDelete !== null}
+        onClose={() => setBlockPendingDelete(null)}
+        title="¿Eliminar sección?"
+        centered
+        size="sm"
+      >
+        <Stack gap="md">
+          <Text>¿Seguro que quieres eliminar {blockPendingDelete?.label}? Esta acción no se puede deshacer.</Text>
+          <div className="flex justify-end gap-2">
+            <Button variant="default" onClick={() => setBlockPendingDelete(null)}>Cancelar</Button>
+            <Button color="red" disabled={!editorData?.project.canEdit} onClick={() => {
+              if (blockPendingDelete) deleteBlock(blockPendingDelete.pageId, blockPendingDelete.blockId);
+              setBlockPendingDelete(null);
+            }}>Eliminar sección</Button>
+          </div>
         </Stack>
       </Modal>
     </main>
