@@ -88,6 +88,8 @@ El historial conserva hasta 20 cambios recientes como diferencias reversibles
 del `SiteDocument`, no como copias completas. El modo de vista previa y la
 visibilidad del panel son preferencias locales y no forman parte del historial
 ni del documento que se guarda.
+Los cambios se pueden deshacer con `Ctrl+Z` y rehacer con `Ctrl+Y` o `Ctrl+Shift+Z`;
+estos atajos no interceptan la edición de campos de texto.
 
 El arrastre no puede ser la única forma de ordenar. Los botones deben tener nombres accesibles y el bloque seleccionado debe ser visible con un estado de foco claro.
 

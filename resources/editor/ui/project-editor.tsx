@@ -204,7 +204,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     setEditorData({ ...editorData, draftDocument: nextDocument });
   }
 
-  function syncSelectedProperties(document: SiteDocument) {
+  const syncSelectedProperties = useCallback((document: SiteDocument) => {
     if (!selection) return;
     const block = document.pages.find((page) => page.id === selection.pageId)
       ?.blocks.find((candidate) => candidate.id === selection.blockId);
@@ -214,9 +214,9 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       ? { ...definition.defaultProps, ...block.props }
       : structuredClone(block.props));
     setPropertyErrors({});
-  }
+  }, [selection]);
 
-  function undoDocumentChange() {
+  const undoDocumentChange = useCallback(() => {
     if (!editorData?.project.canEdit || history.past.length === 0) return;
     const entry = history.past[history.past.length - 1];
     const previous = editorDiff.unpatch(structuredClone(editorData.draftDocument), entry.delta) as SiteDocument;
@@ -226,9 +226,9 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     }));
     setEditorData({ ...editorData, draftDocument: previous });
     syncSelectedProperties(previous);
-  }
+  }, [editorData, history, syncSelectedProperties]);
 
-  function redoDocumentChange() {
+  const redoDocumentChange = useCallback(() => {
     if (!editorData?.project.canEdit || history.future.length === 0) return;
     const entry = history.future[0];
     const next = editorDiff.patch(structuredClone(editorData.draftDocument), entry.delta) as SiteDocument;
@@ -238,7 +238,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     }));
     setEditorData({ ...editorData, draftDocument: next });
     syncSelectedProperties(next);
-  }
+  }, [editorData, history, syncSelectedProperties]);
 
   function selectBlock(nextSelection: BlockSelection) {
     const panelScrollTop = sectionsPanelRef.current?.scrollTop ?? 0;
@@ -810,6 +810,33 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       .get(selectionKey(selection))
       ?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
   }, [selection]);
+
+  useEffect(() => {
+    function handleHistoryShortcut(event: globalThis.KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.defaultPrevented) return;
+
+      const target = event.target;
+      if (target instanceof HTMLElement && (
+        target.isContentEditable
+        || target.closest('[contenteditable="true"]')
+        || target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+      )) return;
+
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        undoDocumentChange();
+      } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        redoDocumentChange();
+      }
+    }
+
+    window.addEventListener('keydown', handleHistoryShortcut);
+    return () => window.removeEventListener('keydown', handleHistoryShortcut);
+  }, [redoDocumentChange, undoDocumentChange]);
 
   useEffect(() => {
     const controller = new AbortController();
