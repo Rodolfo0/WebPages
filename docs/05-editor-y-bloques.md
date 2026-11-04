@@ -84,6 +84,11 @@ No se permitirá CSS arbitrario, HTML personalizado ni JavaScript introducido po
 - Cambiar entre vista de escritorio y móvil.
 - Ocultar el panel para revisar la página.
 
+El historial conserva hasta 20 cambios recientes como diferencias reversibles
+del `SiteDocument`, no como copias completas. El modo de vista previa y la
+visibilidad del panel son preferencias locales y no forman parte del historial
+ni del documento que se guarda.
+
 El arrastre no puede ser la única forma de ordenar. Los botones deben tener nombres accesibles y el bloque seleccionado debe ser visible con un estado de foco claro.
 
 El catálogo del canvas se deriva de `portfolioBlockRegistry`. Al añadir un bloque, el editor clona sus `defaultProps`, crea un id nuevo, lo agrega al final de la página y valida el `SiteDocument` completo con el mismo registro. La selección y los cambios del documento permanecen en el estado local del editor hasta que se implemente el guardado.

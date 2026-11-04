@@ -17,7 +17,8 @@ import {
 } from '@mantine/core';
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, Copy, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Monitor, Redo2, Smartphone, Trash2, Undo2 } from 'lucide-react';
+import { create, type Delta } from 'jsondiffpatch';
 import { portfolioBlockRegistry, requireBlock } from '../../blocks';
 import type { BlockProps, JsonValue, SiteDocument } from '../../site-document';
 import {
@@ -56,6 +57,15 @@ type BlockSelection = {
 };
 
 type DropTarget = BlockSelection & { position: 'before' | 'after' };
+type HistoryEntry = { delta: Delta };
+
+const editorDiff = create({
+  objectHash: (item, index) => {
+    const id = (item as { id?: unknown }).id;
+    return typeof id === 'string' ? id : `$$index:${index ?? 0}`;
+  },
+  cloneDiffValues: true,
+});
 
 function isSelected(selection: BlockSelection | null, pageId: string, blockId: string) {
   return selection !== null && selection.pageId === pageId && selection.blockId === blockId;
@@ -156,6 +166,9 @@ export default function ProjectEditor({ projectId }: { projectId: string }) {
 function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [editorData, setEditorData] = useState<EditorData | null>(null);
   const [selection, setSelection] = useState<BlockSelection | null>(null);
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [sectionsPanelVisible, setSectionsPanelVisible] = useState(true);
+  const [history, setHistory] = useState<{ past: HistoryEntry[]; future: HistoryEntry[] }>({ past: [], future: [] });
   const [catalogOpened, setCatalogOpened] = useState(false);
   const [blockPendingDelete, setBlockPendingDelete] = useState<{ pageId: string; blockId: string; label: string } | null>(null);
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -177,6 +190,54 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const skipSelectionScroll = useRef(false);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const sectionsPanelRef = useRef<HTMLDivElement | null>(null);
+
+  function commitDocument(nextDocument: SiteDocument) {
+    if (!editorData || JSON.stringify(nextDocument) === JSON.stringify(editorData.draftDocument)) return;
+    const delta = editorDiff.diff(editorData.draftDocument, nextDocument);
+    if (!delta) return;
+    const entry: HistoryEntry = { delta };
+    setHistory((current) => ({
+      past: [...current.past, entry].slice(-20),
+      future: [],
+    }));
+    setEditorData({ ...editorData, draftDocument: nextDocument });
+  }
+
+  function syncSelectedProperties(document: SiteDocument) {
+    if (!selection) return;
+    const block = document.pages.find((page) => page.id === selection.pageId)
+      ?.blocks.find((candidate) => candidate.id === selection.blockId);
+    if (!block) return;
+    const definition = portfolioBlockRegistry.get(block.type);
+    setPropertyDraft(definition?.defaultProps
+      ? { ...definition.defaultProps, ...block.props }
+      : structuredClone(block.props));
+    setPropertyErrors({});
+  }
+
+  function undoDocumentChange() {
+    if (!editorData?.project.canEdit || history.past.length === 0) return;
+    const entry = history.past[history.past.length - 1];
+    const previous = editorDiff.unpatch(structuredClone(editorData.draftDocument), entry.delta) as SiteDocument;
+    setHistory((current) => ({
+      past: current.past.slice(0, -1),
+      future: [entry, ...current.future].slice(0, 20),
+    }));
+    setEditorData({ ...editorData, draftDocument: previous });
+    syncSelectedProperties(previous);
+  }
+
+  function redoDocumentChange() {
+    if (!editorData?.project.canEdit || history.future.length === 0) return;
+    const entry = history.future[0];
+    const next = editorDiff.patch(structuredClone(editorData.draftDocument), entry.delta) as SiteDocument;
+    setHistory((current) => ({
+      past: [...current.past, entry].slice(-20),
+      future: current.future.slice(1),
+    }));
+    setEditorData({ ...editorData, draftDocument: next });
+    syncSelectedProperties(next);
+  }
 
   function selectBlock(nextSelection: BlockSelection) {
     const panelScrollTop = sectionsPanelRef.current?.scrollTop ?? 0;
@@ -240,7 +301,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         selection.blockId,
         nextDraft,
       );
-      setEditorData({ ...editorData, draftDocument: nextDocument });
+      commitDocument(nextDocument);
       setPropertyErrors({});
     } catch (error) {
       if (error instanceof BlockPropsValidationError) {
@@ -575,7 +636,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
     try {
       const result = addBlockToDocument(editorData.draftDocument, pageId, blockType);
-      setEditorData({ ...editorData, draftDocument: result.document });
+      commitDocument(result.document);
       setCatalogError('');
       setCatalogOpened(false);
       setCatalogSearch('');
@@ -591,13 +652,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     const currentIndex = page?.blocks.findIndex((block) => block.id === blockId) ?? -1;
     if (!page || currentIndex < 0 || targetIndex < 0 || targetIndex >= page.blocks.length || targetIndex === currentIndex) return;
     skipSelectionScroll.current = !isSelected(selection, pageId, blockId);
-    setEditorData({ ...editorData, draftDocument: moveBlockInDocument(editorData.draftDocument, pageId, blockId, targetIndex) });
+    commitDocument(moveBlockInDocument(editorData.draftDocument, pageId, blockId, targetIndex));
   }
 
   function duplicateBlock(pageId: string, blockId: string) {
     if (!editorData?.project.canEdit) return;
     const result = duplicateBlockInDocument(editorData.draftDocument, pageId, blockId);
-    setEditorData({ ...editorData, draftDocument: result.document });
+    commitDocument(result.document);
     selectBlock({ pageId, blockId: result.blockId });
   }
 
@@ -607,7 +668,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     if (!page) return;
     const index = page.blocks.findIndex((block) => block.id === blockId);
     const nextDocument = deleteBlockFromDocument(editorData.draftDocument, pageId, blockId);
-    setEditorData({ ...editorData, draftDocument: nextDocument });
+    commitDocument(nextDocument);
     if (selection?.pageId === pageId && selection.blockId === blockId) {
       const nextBlock = page.blocks[Math.min(index, page.blocks.length - 2)] ?? page.blocks[index + 1];
       if (nextBlock) selectBlock({ pageId, blockId: nextBlock.id });
@@ -763,6 +824,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         }
 
         setEditorData({ project: result.project, draftDocument: result.draftDocument });
+        setHistory({ past: [], future: [] });
         lastSavedDraft.current = JSON.stringify(result.draftDocument);
         setSaveStatus('saved');
         const firstPage = result.draftDocument.pages[0];
@@ -845,19 +907,30 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             {loadError}
           </Alert>
         ) : editorData ? (
-          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className={`grid min-w-0 gap-5 ${sectionsPanelVisible ? 'lg:grid-cols-[minmax(0,1fr)_18rem]' : 'lg:grid-cols-1'}`}>
             <section aria-label="Canvas del sitio" className="order-last min-w-0 lg:order-none">
               <Card withBorder radius="lg" padding="md" className={styles.canvasSurface}>
                 <Stack gap="md">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Title order={2}>Vista de página</Title>
-                    <Badge variant="light" color={editorData.project.canEdit ? 'indigo' : 'gray'}>
-                      {editorData.project.canEdit ? 'Editable' : 'Solo lectura'}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button.Group aria-label="Tamaño de vista previa">
+                        <Button variant={previewMode === 'desktop' ? 'filled' : 'default'} aria-pressed={previewMode === 'desktop'} aria-label="Vista de escritorio" onClick={() => setPreviewMode('desktop')}><Monitor size={16} aria-hidden="true" /> Escritorio</Button>
+                        <Button variant={previewMode === 'mobile' ? 'filled' : 'default'} aria-pressed={previewMode === 'mobile'} aria-label="Vista móvil" onClick={() => setPreviewMode('mobile')}><Smartphone size={16} aria-hidden="true" /> Móvil</Button>
+                      </Button.Group>
+                      <Button variant="default" aria-label={sectionsPanelVisible ? 'Ocultar panel lateral' : 'Mostrar panel lateral'} aria-pressed={!sectionsPanelVisible} onClick={() => setSectionsPanelVisible((visible) => !visible)}>
+                        {sectionsPanelVisible ? 'Ocultar panel' : 'Mostrar panel'}
+                      </Button>
+                      <Button variant="default" aria-label="Deshacer" disabled={!editorData.project.canEdit || history.past.length === 0} onClick={undoDocumentChange}><Undo2 size={16} aria-hidden="true" /></Button>
+                      <Button variant="default" aria-label="Rehacer" disabled={!editorData.project.canEdit || history.future.length === 0} onClick={redoDocumentChange}><Redo2 size={16} aria-hidden="true" /></Button>
+                      <Badge variant="light" color={editorData.project.canEdit ? 'indigo' : 'gray'}>
+                        {editorData.project.canEdit ? 'Editable' : 'Solo lectura'}
+                      </Badge>
+                    </div>
                   </div>
-                  <div ref={canvasViewportRef} className={styles.canvasViewport}>
+                  <div ref={canvasViewportRef} className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
                     {editorData.draftDocument.pages.map((page) => (
-                      <article key={page.id} className={styles.pageCanvas} aria-label={`Página ${page.path}`}>
+                      <article key={page.id} className={styles.pageCanvas} data-preview={previewMode} aria-label={`Página ${page.path}`}>
                         {page.blocks.map((block, blockIndex) => (
                           <Fragment key={block.id}>
                           {dropPlaceholder(page.id, block.id, 'before')}
@@ -888,7 +961,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               </Card>
             </section>
 
-            <aside aria-label="Lista de secciones" className="order-first min-w-0 lg:order-none">
+            {sectionsPanelVisible && <aside aria-label="Lista de secciones" className="order-first min-w-0 lg:order-none">
               <Card ref={sectionsPanelRef} withBorder radius="lg" padding="sm" className={styles.sectionsPanel}>
                 <Stack gap="md">
                   <div>
@@ -1003,7 +1076,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                   </section>
                 </Stack>
               </Card>
-            </aside>
+            </aside>}
           </div>
         ) : null}
       </div>
@@ -1055,7 +1128,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         size="sm"
       >
         <Stack gap="md">
-          <Text>¿Seguro que quieres eliminar {blockPendingDelete?.label}? Esta acción no se puede deshacer.</Text>
+          <Text>¿Seguro que quieres eliminar {blockPendingDelete?.label}? Puedes deshacerlo desde la vista previa.</Text>
           <div className="flex justify-end gap-2">
             <Button variant="default" onClick={() => setBlockPendingDelete(null)}>Cancelar</Button>
             <Button color="red" disabled={!editorData?.project.canEdit} onClick={() => {
