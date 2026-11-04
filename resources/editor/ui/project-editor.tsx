@@ -276,7 +276,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
   function humanizeProperty(key: string) {
     const labels: Record<string, string> = {
-      setup: 'Setup',
+      setup: 'Estilo',
       headline: 'Titular', eyebrow: 'Texto superior', introduction: 'Presentación',
       imageAssetId: 'Imagen', imageAlt: 'Texto alternativo', ctaLabel: 'Texto del botón', ctaUrl: 'Enlace del botón',
       heading: 'Título', body: 'Contenido', message: 'Mensaje', email: 'Email', phone: 'Teléfono',
@@ -458,7 +458,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         return (
           <Select
             key={path.join('.')}
-            label="Setup"
+            label="Estilo"
             description="Elige el estilo visual para esta sección"
             value={value}
             disabled={!editorData?.project.canEdit}
