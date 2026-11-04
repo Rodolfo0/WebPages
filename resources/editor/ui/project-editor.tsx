@@ -186,6 +186,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const lastSavedDraft = useRef('');
   const saveRevision = useRef(0);
   const canvasBlockFrames = useRef(new Map<string, HTMLDivElement>());
+  const dragTargetBounds = useRef(new Map<string, DOMRect>());
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const skipSelectionScroll = useRef(false);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -689,7 +690,12 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     scrollCanvasDuringDrag(event);
-    const bounds = event.currentTarget.getBoundingClientRect();
+    const targetKey = selectionKey(target);
+    let bounds = dragTargetBounds.current.get(targetKey);
+    if (!bounds) {
+      bounds = event.currentTarget.getBoundingClientRect();
+      dragTargetBounds.current.set(targetKey, bounds);
+    }
     const position = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
     setDropTarget((current) => current?.pageId === target.pageId && current.blockId === target.blockId && current.position === position
       ? current
@@ -731,6 +737,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       if (sourceIndex < destinationIndex) destinationIndex -= 1;
       reorderBlock(target.pageId, draggedBlock.blockId, destinationIndex);
     }
+    dragTargetBounds.current.clear();
     setDraggedBlock(null);
     setDropTarget(null);
   }
@@ -943,8 +950,8 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                             onSelect={selectBlock}
                             registerFrame={registerCanvasBlock}
                             draggable={editorData.project.canEdit}
-                            onDragStart={() => { setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
-                            onDragEnd={() => { setDraggedBlock(null); setDropTarget(null); }}
+                            onDragStart={() => { dragTargetBounds.current.clear(); setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
+                            onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
                             onDragOver={handleBlockDragOver}
                             onDrop={dropBlock}
                             onMove={(blockSelection, targetIndex) => reorderBlock(blockSelection.pageId, blockSelection.blockId, targetIndex)}
@@ -1005,10 +1012,20 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                                     onDragStart={(event) => {
                                       event.dataTransfer.effectAllowed = 'move';
                                       event.dataTransfer.setData('text/plain', block.id);
+                                      dragTargetBounds.current.clear();
+                                      const dragPreview = event.currentTarget.querySelector<HTMLElement>('[data-drag-preview]');
+                                      if (dragPreview && typeof event.dataTransfer.setDragImage === 'function') {
+                                        const bounds = dragPreview.getBoundingClientRect();
+                                        event.dataTransfer.setDragImage(
+                                          dragPreview,
+                                          bounds.width * 0.5,
+                                          bounds.height * 1.35,
+                                        );
+                                      }
                                       setDraggedBlock({ pageId: page.id, blockId: block.id });
                                       setDropTarget(null);
                                     }}
-                                    onDragEnd={() => { setDraggedBlock(null); setDropTarget(null); }}
+                                    onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
                                     onDragOver={(event) => handleBlockDragOver(event, { pageId: page.id, blockId: block.id })}
                                     onDrop={(event) => dropBlock(event, { pageId: page.id, blockId: block.id })}
                                     onKeyDown={(event) => {
@@ -1024,7 +1041,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                                     requestDeleteBlock(page.id, block.id);
                                   }}>
                                     {dropPlaceholder(page.id, block.id, 'before')}
-                                    <Button className={styles.sectionSelect} fullWidth variant={selected ? 'filled' : 'default'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
+                                    <Button data-drag-preview className={styles.sectionSelect} fullWidth variant={selected ? 'filled' : 'default'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
                                       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
                                       event.preventDefault();
                                       selectBlock({ pageId: page.id, blockId: block.id });
