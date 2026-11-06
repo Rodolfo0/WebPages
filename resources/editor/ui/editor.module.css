@@ -24,6 +24,17 @@
   box-shadow: var(--mantine-shadow-sm);
 }
 
+.pageCanvas[data-preview='mobile'] {
+  width: 375px;
+  max-width: 100%;
+  min-height: 48rem;
+  outline: 1px solid var(--mantine-color-gray-3);
+}
+
+.mobilePreview {
+  background: var(--mantine-color-gray-2);
+}
+
 .dropPlaceholder {
   display: grid;
   min-height: 4rem;

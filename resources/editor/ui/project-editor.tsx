@@ -15,9 +15,12 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
+import { useHotkeys } from '@mantine/hooks';
+import type { HotkeyItem } from '@mantine/hooks';
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, Copy, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Monitor, Redo2, Smartphone, Trash2, Undo2 } from 'lucide-react';
+import { create, type Delta } from 'jsondiffpatch';
 import { portfolioBlockRegistry, requireBlock } from '../../blocks';
 import type { BlockProps, JsonValue, SiteDocument } from '../../site-document';
 import {
@@ -56,6 +59,50 @@ type BlockSelection = {
 };
 
 type DropTarget = BlockSelection & { position: 'before' | 'after' };
+type HistoryEntry = { delta: Delta };
+type EditorCommandScope = 'global' | 'editor' | 'canvas' | 'text-entry';
+type EditorCommand = {
+  id: string;
+  hotkey: string;
+  scope: EditorCommandScope;
+  run: (event: globalThis.KeyboardEvent) => void;
+};
+
+const commandScopePriority: Record<EditorCommandScope, number> = {
+  global: 0,
+  editor: 1,
+  canvas: 2,
+  'text-entry': 2,
+};
+
+function isTextEntryTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && (
+    target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || target.isContentEditable
+    || target.closest('[contenteditable="true"]') !== null
+  );
+}
+
+function isCommandScopeActive(scope: EditorCommandScope, event: globalThis.KeyboardEvent) {
+  if (scope === 'global') return true;
+  if (scope === 'editor') {
+    return event.target instanceof Element
+      && event.target.closest('[data-editor-command-scope~="editor"]') !== null;
+  }
+  if (scope === 'text-entry') return isTextEntryTarget(event.target);
+  return event.target instanceof Element
+    && event.target.closest('[data-editor-command-scope~="canvas"]') !== null;
+}
+
+const editorDiff = create({
+  objectHash: (item, index) => {
+    const id = (item as { id?: unknown }).id;
+    return typeof id === 'string' ? id : `$$index:${index ?? 0}`;
+  },
+  cloneDiffValues: true,
+});
 
 function isSelected(selection: BlockSelection | null, pageId: string, blockId: string) {
   return selection !== null && selection.pageId === pageId && selection.blockId === blockId;
@@ -156,6 +203,9 @@ export default function ProjectEditor({ projectId }: { projectId: string }) {
 function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [editorData, setEditorData] = useState<EditorData | null>(null);
   const [selection, setSelection] = useState<BlockSelection | null>(null);
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [sectionsPanelVisible, setSectionsPanelVisible] = useState(true);
+  const [history, setHistory] = useState<{ past: HistoryEntry[]; future: HistoryEntry[] }>({ past: [], future: [] });
   const [catalogOpened, setCatalogOpened] = useState(false);
   const [blockPendingDelete, setBlockPendingDelete] = useState<{ pageId: string; blockId: string; label: string } | null>(null);
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -173,10 +223,59 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const lastSavedDraft = useRef('');
   const saveRevision = useRef(0);
   const canvasBlockFrames = useRef(new Map<string, HTMLDivElement>());
+  const dragTargetBounds = useRef(new Map<string, DOMRect>());
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const skipSelectionScroll = useRef(false);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const sectionsPanelRef = useRef<HTMLDivElement | null>(null);
+
+  function commitDocument(nextDocument: SiteDocument) {
+    if (!editorData || JSON.stringify(nextDocument) === JSON.stringify(editorData.draftDocument)) return;
+    const delta = editorDiff.diff(editorData.draftDocument, nextDocument);
+    if (!delta) return;
+    const entry: HistoryEntry = { delta };
+    setHistory((current) => ({
+      past: [...current.past, entry].slice(-20),
+      future: [],
+    }));
+    setEditorData({ ...editorData, draftDocument: nextDocument });
+  }
+
+  const syncSelectedProperties = useCallback((document: SiteDocument) => {
+    if (!selection) return;
+    const block = document.pages.find((page) => page.id === selection.pageId)
+      ?.blocks.find((candidate) => candidate.id === selection.blockId);
+    if (!block) return;
+    const definition = portfolioBlockRegistry.get(block.type);
+    setPropertyDraft(definition?.defaultProps
+      ? { ...definition.defaultProps, ...block.props }
+      : structuredClone(block.props));
+    setPropertyErrors({});
+  }, [selection]);
+
+  const undoDocumentChange = useCallback(() => {
+    if (!editorData?.project.canEdit || history.past.length === 0) return;
+    const entry = history.past[history.past.length - 1];
+    const previous = editorDiff.unpatch(structuredClone(editorData.draftDocument), entry.delta) as SiteDocument;
+    setHistory((current) => ({
+      past: current.past.slice(0, -1),
+      future: [entry, ...current.future].slice(0, 20),
+    }));
+    setEditorData({ ...editorData, draftDocument: previous });
+    syncSelectedProperties(previous);
+  }, [editorData, history, syncSelectedProperties]);
+
+  const redoDocumentChange = useCallback(() => {
+    if (!editorData?.project.canEdit || history.future.length === 0) return;
+    const entry = history.future[0];
+    const next = editorDiff.patch(structuredClone(editorData.draftDocument), entry.delta) as SiteDocument;
+    setHistory((current) => ({
+      past: [...current.past, entry].slice(-20),
+      future: current.future.slice(1),
+    }));
+    setEditorData({ ...editorData, draftDocument: next });
+    syncSelectedProperties(next);
+  }, [editorData, history, syncSelectedProperties]);
 
   function selectBlock(nextSelection: BlockSelection) {
     const panelScrollTop = sectionsPanelRef.current?.scrollTop ?? 0;
@@ -215,7 +314,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
   function humanizeProperty(key: string) {
     const labels: Record<string, string> = {
-      setup: 'Setup',
+      setup: 'Estilo',
       headline: 'Titular', eyebrow: 'Texto superior', introduction: 'Presentación',
       imageAssetId: 'Imagen', imageAlt: 'Texto alternativo', ctaLabel: 'Texto del botón', ctaUrl: 'Enlace del botón',
       heading: 'Título', body: 'Contenido', message: 'Mensaje', email: 'Email', phone: 'Teléfono',
@@ -240,7 +339,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         selection.blockId,
         nextDraft,
       );
-      setEditorData({ ...editorData, draftDocument: nextDocument });
+      commitDocument(nextDocument);
       setPropertyErrors({});
     } catch (error) {
       if (error instanceof BlockPropsValidationError) {
@@ -397,7 +496,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         return (
           <Select
             key={path.join('.')}
-            label="Setup"
+            label="Estilo"
             description="Elige el estilo visual para esta sección"
             value={value}
             disabled={!editorData?.project.canEdit}
@@ -575,7 +674,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
     try {
       const result = addBlockToDocument(editorData.draftDocument, pageId, blockType);
-      setEditorData({ ...editorData, draftDocument: result.document });
+      commitDocument(result.document);
       setCatalogError('');
       setCatalogOpened(false);
       setCatalogSearch('');
@@ -591,13 +690,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     const currentIndex = page?.blocks.findIndex((block) => block.id === blockId) ?? -1;
     if (!page || currentIndex < 0 || targetIndex < 0 || targetIndex >= page.blocks.length || targetIndex === currentIndex) return;
     skipSelectionScroll.current = !isSelected(selection, pageId, blockId);
-    setEditorData({ ...editorData, draftDocument: moveBlockInDocument(editorData.draftDocument, pageId, blockId, targetIndex) });
+    commitDocument(moveBlockInDocument(editorData.draftDocument, pageId, blockId, targetIndex));
   }
 
   function duplicateBlock(pageId: string, blockId: string) {
     if (!editorData?.project.canEdit) return;
     const result = duplicateBlockInDocument(editorData.draftDocument, pageId, blockId);
-    setEditorData({ ...editorData, draftDocument: result.document });
+    commitDocument(result.document);
     selectBlock({ pageId, blockId: result.blockId });
   }
 
@@ -607,7 +706,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     if (!page) return;
     const index = page.blocks.findIndex((block) => block.id === blockId);
     const nextDocument = deleteBlockFromDocument(editorData.draftDocument, pageId, blockId);
-    setEditorData({ ...editorData, draftDocument: nextDocument });
+    commitDocument(nextDocument);
     if (selection?.pageId === pageId && selection.blockId === blockId) {
       const nextBlock = page.blocks[Math.min(index, page.blocks.length - 2)] ?? page.blocks[index + 1];
       if (nextBlock) selectBlock({ pageId, blockId: nextBlock.id });
@@ -628,7 +727,12 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     scrollCanvasDuringDrag(event);
-    const bounds = event.currentTarget.getBoundingClientRect();
+    const targetKey = selectionKey(target);
+    let bounds = dragTargetBounds.current.get(targetKey);
+    if (!bounds) {
+      bounds = event.currentTarget.getBoundingClientRect();
+      dragTargetBounds.current.set(targetKey, bounds);
+    }
     const position = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
     setDropTarget((current) => current?.pageId === target.pageId && current.blockId === target.blockId && current.position === position
       ? current
@@ -670,6 +774,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       if (sourceIndex < destinationIndex) destinationIndex -= 1;
       reorderBlock(target.pageId, draggedBlock.blockId, destinationIndex);
     }
+    dragTargetBounds.current.clear();
     setDraggedBlock(null);
     setDropTarget(null);
   }
@@ -717,6 +822,27 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
   const currentDraftJson = editorData ? JSON.stringify(editorData.draftDocument) : '';
 
+  const editorCommands: EditorCommand[] = [
+    { id: 'undo', hotkey: 'mod+z', scope: 'global', run: undoDocumentChange },
+    { id: 'redo', hotkey: 'mod+y', scope: 'global', run: redoDocumentChange },
+    { id: 'redo-shift-z', hotkey: 'mod+shift+z', scope: 'global', run: redoDocumentChange },
+  ];
+  const registeredHotkeys = [...new Set(editorCommands.map((command) => command.hotkey))];
+  const hotkeys: HotkeyItem[] = registeredHotkeys.map((hotkey) => [
+    hotkey,
+    (event) => {
+      const command = editorCommands
+        .filter((candidate) => candidate.hotkey === hotkey && isCommandScopeActive(candidate.scope, event))
+        .sort((first, second) => commandScopePriority[second.scope] - commandScopePriority[first.scope])[0];
+      if (!command) return;
+      event.preventDefault();
+      command.run(event);
+    },
+    { preventDefault: false },
+  ]);
+
+  useHotkeys(hotkeys, [], true);
+
   useEffect(() => {
     if (!editorData?.project.canEdit || !currentDraftJson) return;
     if (currentDraftJson === lastSavedDraft.current) {
@@ -763,6 +889,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         }
 
         setEditorData({ project: result.project, draftDocument: result.draftDocument });
+        setHistory({ past: [], future: [] });
         lastSavedDraft.current = JSON.stringify(result.draftDocument);
         setSaveStatus('saved');
         const firstPage = result.draftDocument.pages[0];
@@ -792,7 +919,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   return (
-    <main className="min-h-dvh bg-slate-50 px-4 py-6 text-slate-900 sm:px-8">
+    <main data-editor-command-scope="editor" className="min-h-dvh bg-slate-50 px-4 py-6 text-slate-900 sm:px-8">
       <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -845,19 +972,30 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             {loadError}
           </Alert>
         ) : editorData ? (
-          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className={`grid min-w-0 gap-5 ${sectionsPanelVisible ? 'lg:grid-cols-[minmax(0,1fr)_18rem]' : 'lg:grid-cols-1'}`}>
             <section aria-label="Canvas del sitio" className="order-last min-w-0 lg:order-none">
               <Card withBorder radius="lg" padding="md" className={styles.canvasSurface}>
                 <Stack gap="md">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Title order={2}>Vista de página</Title>
-                    <Badge variant="light" color={editorData.project.canEdit ? 'indigo' : 'gray'}>
-                      {editorData.project.canEdit ? 'Editable' : 'Solo lectura'}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button.Group aria-label="Tamaño de vista previa">
+                        <Button variant={previewMode === 'desktop' ? 'filled' : 'default'} aria-pressed={previewMode === 'desktop'} aria-label="Vista de escritorio" onClick={() => setPreviewMode('desktop')}><Monitor size={16} aria-hidden="true" /> Escritorio</Button>
+                        <Button variant={previewMode === 'mobile' ? 'filled' : 'default'} aria-pressed={previewMode === 'mobile'} aria-label="Vista móvil" onClick={() => setPreviewMode('mobile')}><Smartphone size={16} aria-hidden="true" /> Móvil</Button>
+                      </Button.Group>
+                      <Button variant="default" aria-label={sectionsPanelVisible ? 'Ocultar panel lateral' : 'Mostrar panel lateral'} aria-pressed={!sectionsPanelVisible} onClick={() => setSectionsPanelVisible((visible) => !visible)}>
+                        {sectionsPanelVisible ? 'Ocultar panel' : 'Mostrar panel'}
+                      </Button>
+                      <Button variant="default" aria-label="Deshacer" disabled={!editorData.project.canEdit || history.past.length === 0} onClick={undoDocumentChange}><Undo2 size={16} aria-hidden="true" /></Button>
+                      <Button variant="default" aria-label="Rehacer" disabled={!editorData.project.canEdit || history.future.length === 0} onClick={redoDocumentChange}><Redo2 size={16} aria-hidden="true" /></Button>
+                      <Badge variant="light" color={editorData.project.canEdit ? 'indigo' : 'gray'}>
+                        {editorData.project.canEdit ? 'Editable' : 'Solo lectura'}
+                      </Badge>
+                    </div>
                   </div>
-                  <div ref={canvasViewportRef} className={styles.canvasViewport}>
+                  <div ref={canvasViewportRef} data-editor-command-scope="canvas" className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
                     {editorData.draftDocument.pages.map((page) => (
-                      <article key={page.id} className={styles.pageCanvas} aria-label={`Página ${page.path}`}>
+                      <article key={page.id} className={styles.pageCanvas} data-preview={previewMode} aria-label={`Página ${page.path}`}>
                         {page.blocks.map((block, blockIndex) => (
                           <Fragment key={block.id}>
                           {dropPlaceholder(page.id, block.id, 'before')}
@@ -870,8 +1008,8 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                             onSelect={selectBlock}
                             registerFrame={registerCanvasBlock}
                             draggable={editorData.project.canEdit}
-                            onDragStart={() => { setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
-                            onDragEnd={() => { setDraggedBlock(null); setDropTarget(null); }}
+                            onDragStart={() => { dragTargetBounds.current.clear(); setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
+                            onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
                             onDragOver={handleBlockDragOver}
                             onDrop={dropBlock}
                             onMove={(blockSelection, targetIndex) => reorderBlock(blockSelection.pageId, blockSelection.blockId, targetIndex)}
@@ -888,7 +1026,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               </Card>
             </section>
 
-            <aside aria-label="Lista de secciones" className="order-first min-w-0 lg:order-none">
+            {sectionsPanelVisible && <aside aria-label="Lista de secciones" className="order-first min-w-0 lg:order-none">
               <Card ref={sectionsPanelRef} withBorder radius="lg" padding="sm" className={styles.sectionsPanel}>
                 <Stack gap="md">
                   <div>
@@ -932,10 +1070,20 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                                     onDragStart={(event) => {
                                       event.dataTransfer.effectAllowed = 'move';
                                       event.dataTransfer.setData('text/plain', block.id);
+                                      dragTargetBounds.current.clear();
+                                      const dragPreview = event.currentTarget.querySelector<HTMLElement>('[data-drag-preview]');
+                                      if (dragPreview && typeof event.dataTransfer.setDragImage === 'function') {
+                                        const bounds = dragPreview.getBoundingClientRect();
+                                        event.dataTransfer.setDragImage(
+                                          dragPreview,
+                                          bounds.width * 0.5,
+                                          bounds.height * 1.35,
+                                        );
+                                      }
                                       setDraggedBlock({ pageId: page.id, blockId: block.id });
                                       setDropTarget(null);
                                     }}
-                                    onDragEnd={() => { setDraggedBlock(null); setDropTarget(null); }}
+                                    onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
                                     onDragOver={(event) => handleBlockDragOver(event, { pageId: page.id, blockId: block.id })}
                                     onDrop={(event) => dropBlock(event, { pageId: page.id, blockId: block.id })}
                                     onKeyDown={(event) => {
@@ -951,7 +1099,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                                     requestDeleteBlock(page.id, block.id);
                                   }}>
                                     {dropPlaceholder(page.id, block.id, 'before')}
-                                    <Button className={styles.sectionSelect} fullWidth variant={selected ? 'filled' : 'default'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
+                                    <Button data-drag-preview className={styles.sectionSelect} fullWidth variant={selected ? 'filled' : 'default'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
                                       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
                                       event.preventDefault();
                                       selectBlock({ pageId: page.id, blockId: block.id });
@@ -1003,7 +1151,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                   </section>
                 </Stack>
               </Card>
-            </aside>
+            </aside>}
           </div>
         ) : null}
       </div>
@@ -1055,7 +1203,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         size="sm"
       >
         <Stack gap="md">
-          <Text>¿Seguro que quieres eliminar {blockPendingDelete?.label}? Esta acción no se puede deshacer.</Text>
+          <Text>¿Seguro que quieres eliminar {blockPendingDelete?.label}? Puedes deshacerlo desde la vista previa.</Text>
           <div className="flex justify-end gap-2">
             <Button variant="default" onClick={() => setBlockPendingDelete(null)}>Cancelar</Button>
             <Button color="red" disabled={!editorData?.project.canEdit} onClick={() => {
