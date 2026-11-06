@@ -15,6 +15,8 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
+import { useHotkeys } from '@mantine/hooks';
+import type { HotkeyItem } from '@mantine/hooks';
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ArrowDown, ArrowUp, Copy, Monitor, Redo2, Smartphone, Trash2, Undo2 } from 'lucide-react';
@@ -58,6 +60,41 @@ type BlockSelection = {
 
 type DropTarget = BlockSelection & { position: 'before' | 'after' };
 type HistoryEntry = { delta: Delta };
+type EditorCommandScope = 'global' | 'editor' | 'canvas' | 'text-entry';
+type EditorCommand = {
+  id: string;
+  hotkey: string;
+  scope: EditorCommandScope;
+  run: (event: globalThis.KeyboardEvent) => void;
+};
+
+const commandScopePriority: Record<EditorCommandScope, number> = {
+  global: 0,
+  editor: 1,
+  canvas: 2,
+  'text-entry': 2,
+};
+
+function isTextEntryTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && (
+    target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || target.isContentEditable
+    || target.closest('[contenteditable="true"]') !== null
+  );
+}
+
+function isCommandScopeActive(scope: EditorCommandScope, event: globalThis.KeyboardEvent) {
+  if (scope === 'global') return true;
+  if (scope === 'editor') {
+    return event.target instanceof Element
+      && event.target.closest('[data-editor-command-scope~="editor"]') !== null;
+  }
+  if (scope === 'text-entry') return isTextEntryTarget(event.target);
+  return event.target instanceof Element
+    && event.target.closest('[data-editor-command-scope~="canvas"]') !== null;
+}
 
 const editorDiff = create({
   objectHash: (item, index) => {
@@ -785,6 +822,27 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
   const currentDraftJson = editorData ? JSON.stringify(editorData.draftDocument) : '';
 
+  const editorCommands: EditorCommand[] = [
+    { id: 'undo', hotkey: 'mod+z', scope: 'global', run: undoDocumentChange },
+    { id: 'redo', hotkey: 'mod+y', scope: 'global', run: redoDocumentChange },
+    { id: 'redo-shift-z', hotkey: 'mod+shift+z', scope: 'global', run: redoDocumentChange },
+  ];
+  const registeredHotkeys = [...new Set(editorCommands.map((command) => command.hotkey))];
+  const hotkeys: HotkeyItem[] = registeredHotkeys.map((hotkey) => [
+    hotkey,
+    (event) => {
+      const command = editorCommands
+        .filter((candidate) => candidate.hotkey === hotkey && isCommandScopeActive(candidate.scope, event))
+        .sort((first, second) => commandScopePriority[second.scope] - commandScopePriority[first.scope])[0];
+      if (!command) return;
+      event.preventDefault();
+      command.run(event);
+    },
+    { preventDefault: false },
+  ]);
+
+  useHotkeys(hotkeys, [], true);
+
   useEffect(() => {
     if (!editorData?.project.canEdit || !currentDraftJson) return;
     if (currentDraftJson === lastSavedDraft.current) {
@@ -810,33 +868,6 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       .get(selectionKey(selection))
       ?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
   }, [selection]);
-
-  useEffect(() => {
-    function handleHistoryShortcut(event: globalThis.KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.defaultPrevented) return;
-
-      const target = event.target;
-      if (target instanceof HTMLElement && (
-        target.isContentEditable
-        || target.closest('[contenteditable="true"]')
-        || target instanceof HTMLInputElement
-        || target instanceof HTMLTextAreaElement
-        || target instanceof HTMLSelectElement
-      )) return;
-
-      const key = event.key.toLowerCase();
-      if (key === 'z' && !event.shiftKey) {
-        event.preventDefault();
-        undoDocumentChange();
-      } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        event.preventDefault();
-        redoDocumentChange();
-      }
-    }
-
-    window.addEventListener('keydown', handleHistoryShortcut);
-    return () => window.removeEventListener('keydown', handleHistoryShortcut);
-  }, [redoDocumentChange, undoDocumentChange]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -888,7 +919,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   return (
-    <main className="min-h-dvh bg-slate-50 px-4 py-6 text-slate-900 sm:px-8">
+    <main data-editor-command-scope="editor" className="min-h-dvh bg-slate-50 px-4 py-6 text-slate-900 sm:px-8">
       <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -962,7 +993,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                       </Badge>
                     </div>
                   </div>
-                  <div ref={canvasViewportRef} className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
+                  <div ref={canvasViewportRef} data-editor-command-scope="canvas" className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
                     {editorData.draftDocument.pages.map((page) => (
                       <article key={page.id} className={styles.pageCanvas} data-preview={previewMode} aria-label={`Página ${page.path}`}>
                         {page.blocks.map((block, blockIndex) => (
