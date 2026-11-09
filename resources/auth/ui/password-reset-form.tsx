@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { AuthUser } from '../domain/auth';
+import styles from './auth.module.css';
 
 export default function PasswordResetForm({ user, onComplete, onSessionInvalid, onCancel }: {
   user: AuthUser;
@@ -47,28 +48,29 @@ export default function PasswordResetForm({ user, onComplete, onSessionInvalid, 
   }
 
   return (
-    <form onSubmit={submit} aria-label="Cambiar contraseña" className="mt-9 max-w-lg space-y-5">
-      <h2 className="text-xl font-semibold">Elige una contraseña nueva</h2>
-      <p className="text-sm text-slate-600">Cuenta: {user.email}</p>
-      <label className="block text-sm font-medium">
+    <form onSubmit={submit} aria-label="Cambiar contraseña" className={styles.resetForm}>
+      <h2 className={styles.resetTitle}>Elige una contraseña nueva</h2>
+      <p className={styles.resetCopy}>Cuenta: {user.email}</p>
+      <label className={styles.field}>
         Nueva contraseña
         <input type="password" autoComplete="new-password" required value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" />
+          className={styles.input} />
       </label>
-      <label className="block text-sm font-medium">
+      <label className={styles.field}>
         Confirmar contraseña
         <input type="password" autoComplete="new-password" required value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}
-          className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" />
+          className={styles.input} />
       </label>
-      {error && <p role="alert" className="text-sm text-rose-800">{error}</p>}
-      <button type="submit" disabled={busy}
-        className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
-        {busy ? 'Guardando…' : 'Guardar contraseña'}
-      </button>
-      {onCancel && <button type="button" onClick={onCancel} disabled={busy}
-        className="w-full text-sm font-semibold text-slate-700">Volver a mi cuenta</button>}
+      {error && <p role="alert" className={styles.notice} data-tone="error">{error}</p>}
+      <div className={styles.buttonStack}>
+        <button type="submit" disabled={busy} className={styles.primaryButton}>
+          {busy ? 'Guardando…' : 'Guardar contraseña'}
+        </button>
+        {onCancel && <button type="button" onClick={onCancel} disabled={busy}
+          className={styles.textButton}>Volver a mi cuenta</button>}
+      </div>
     </form>
   );
 }
