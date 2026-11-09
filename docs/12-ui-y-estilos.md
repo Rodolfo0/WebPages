@@ -1,12 +1,23 @@
 # UI y estilos
 
-Esta es la convención de estilos para el dashboard, el editor y los bloques del sitio. El dashboard de proyectos aplica esta convención y el editor seguirá la misma cuando se implemente.
+Esta es la convención de estilos para el dashboard, el editor y los bloques del sitio. El dashboard y el editor la aplican en el área privada.
+
+## Base visual de la aplicación
+
+- Usa un fondo neutro claro, superficies blancas, texto de alto contraste y el índigo como acento principal. Reserva los colores de estado para guardado, publicación, advertencias y errores.
+- Define los tokens globales en `app/globals.css` y el tema Mantine privado en `resources/projects/ui/app-provider.tsx`. La pantalla de autenticación puede consumir los tokens globales sin montar el proveedor privado.
+- Mantén una escala consistente de separación basada en 8, 12, 16, 24 y 32 px. El padding exterior debe reducirse en móvil y crecer gradualmente en pantallas amplias.
+- Usa radios moderados: aproximadamente 8–12 px para controles y 12–16 px para cards y paneles. Evita bordes anidados y sombras fuertes cuando un separador suave sea suficiente.
+- Las páginas privadas deben adaptarse al viewport. En pantallas pequeñas, prioriza el contenido principal y apila los paneles secundarios; no fuerces columnas estrechas ni controles compactos.
+- En el editor de escritorio, usa el espacio restante debajo del encabezado para el canvas y los paneles laterales, con desplazamiento independiente para cada panel. En móvil, deja que la página recupere el desplazamiento vertical normal.
+- La autenticación comparte colores, radios y tipografía con la aplicación, pero mantiene sus componentes propios para no montar Mantine fuera del layout privado.
 
 ## Aplicación: Mantine para controles, Tailwind para layout
 
 - Usa Mantine para los controles y patrones interactivos: botones, campos, selectores, tabs, menús, diálogos, notificaciones y estados de formulario. Los componentes propios del producto deben componer estos controles, no recrear su apariencia con HTML y clases utilitarias.
 - Configura tema, colores, radios y variantes de Mantine una sola vez en el proveedor de la superficie privada que contiene dashboard y editor. Mantén una convención semántica para las acciones: acción principal con `variant="filled"`, acción secundaria con `variant="default"` y acción destructiva con `color="red"`.
 - Usa Tailwind para la estructura de página y el layout alrededor de los controles: grid, flex, anchos, separación, alineación, overflow y cambios responsive.
+- Prefiere Tailwind para layouts sencillos. Usa CSS Modules junto al recurso para composiciones complejas con paneles, canvas o estados visuales propios de una pantalla; no conviertas esa hoja en una colección de estilos globales.
 - No uses Tailwind para volver a definir el aspecto o los estados de un control Mantine. Evita aplicar sobre esos controles clases de color, fondo, borde, radio, sombra, padding, foco o estado disabled. La tipografía de la interfaz usa los componentes de texto de Mantine; Tailwind puede posicionarlos y dimensionar su contenedor.
 - Coloca cada componente junto al recurso que lo posee, normalmente en `resources/<recurso>/ui/`. Crea componentes en `shared/` solo cuando exista reutilización real entre recursos; la convención visual compartida viene del tema Mantine, no de imports entre recursos.
 
