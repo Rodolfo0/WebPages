@@ -322,16 +322,16 @@ describe('ProjectEditor properties panel', () => {
   it('toggles visual setups between default, modern and artsy', async () => {
     renderEditor();
 
-    const setupCombobox = await screen.findByRole('combobox', { name: 'Setup' });
+    const setupCombobox = await screen.findByRole('combobox', { name: 'Estilo' });
     expect(setupCombobox).toHaveValue('Default');
 
     fireEvent.click(setupCombobox);
     fireEvent.click(await screen.findByText('Modern'));
-    expect(screen.getByRole('combobox', { name: 'Setup' })).toHaveValue('Modern');
+    expect(screen.getByRole('combobox', { name: 'Estilo' })).toHaveValue('Modern');
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Setup' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Estilo' }));
     fireEvent.click(await screen.findByText('Artsy'));
-    expect(screen.getByRole('combobox', { name: 'Setup' })).toHaveValue('Artsy');
+    expect(screen.getByRole('combobox', { name: 'Estilo' })).toHaveValue('Artsy');
   });
 
   it('disables editing when the project is read-only', async () => {
