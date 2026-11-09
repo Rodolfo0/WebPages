@@ -3,21 +3,25 @@
 import {
   Alert,
   Anchor,
+  ActionIcon,
   Badge,
   Button,
   Card,
   Group,
   Loader,
+  Menu,
   Modal,
   Stack,
   Text,
   TextInput,
   Title,
 } from '@mantine/core';
+import { ArrowUpRight, FolderPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { slugifyProjectName } from '../domain/project';
+import styles from './projects-dashboard.module.css';
 
 type ProjectSummary = {
   id: string;
@@ -211,25 +215,27 @@ export default function ProjectsDashboard() {
   }
 
   return (
-    <main className="min-h-dvh bg-slate-50 px-4 py-8 text-slate-900 sm:px-8 sm:py-12">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-        <header className="flex flex-wrap items-start justify-between gap-5">
-          <div>
-            <Text size="sm" fw={700} c="indigo" tt="uppercase">Tu espacio</Text>
-            <Title order={1} mt={6}>Proyectos</Title>
-            <Text c="dimmed" mt={8} maw={640}>
+    <main className={styles.page}>
+      <div className={styles.container}>
+        <header className={styles.header}>
+          <div className={styles.headerCopy}>
+            <Text className={styles.eyebrow}>Tu espacio</Text>
+            <Title order={1} className={styles.title}>Proyectos</Title>
+            <Text className={styles.description}>
               Administra tus portafolios, borradores y versiones publicadas.
             </Text>
           </div>
           {loadError.includes('Inicia sesión') ? (
-            <Button component="a" href="/">Iniciar sesión</Button>
+            <div className={styles.headerActions}>
+              <Button component="a" href="/">Iniciar sesión</Button>
+            </div>
           ) : (
-            <Group>
+            <div className={styles.headerActions}>
               <Button variant="default" onClick={signOut} loading={signOutBusy}>
                 Cerrar sesión
               </Button>
               <Button onClick={openCreateForm}>Crear proyecto</Button>
-            </Group>
+            </div>
           )}
         </header>
 
@@ -240,78 +246,99 @@ export default function ProjectsDashboard() {
         )}
 
         {loading ? (
-          <div className="grid min-h-56 place-items-center" aria-label="Cargando proyectos">
+          <div className={styles.loadingState} aria-label="Cargando proyectos">
             <Loader />
           </div>
         ) : loadError.includes('Inicia sesión') ? null : projects.length === 0 ? (
-          <Card withBorder radius="lg" padding="xl" className="text-center">
-            <Stack align="center" gap="sm">
-              <Title order={2}>Empieza con tu portafolio</Title>
-              <Text c="dimmed" maw={500}>
+          <Card withBorder radius="lg" padding="xl" className={styles.emptyCard}>
+            <div className={styles.emptyContent}>
+              <div className={styles.emptyIcon} aria-hidden="true">
+                <FolderPlus size={25} strokeWidth={1.7} />
+              </div>
+              <Title order={2} className={styles.emptyTitle}>Empieza con tu portafolio</Title>
+              <Text className={styles.emptyCopy}>
                 Crea un proyecto desde la plantilla de portafolio. Tendrá un borrador inicial listo para continuar en el editor.
               </Text>
               <Button mt="sm" onClick={openCreateForm}>Crear mi primer proyecto</Button>
-            </Stack>
+            </div>
           </Card>
         ) : (
-          <section aria-label="Tus proyectos" className="grid gap-4 md:grid-cols-2">
+          <section aria-label="Tus proyectos" className={styles.projectGrid}>
             {projects.map((project) => (
-              <Card key={project.id} withBorder radius="lg" padding="lg">
-                <Stack gap="md">
-                  <Group justify="space-between" align="flex-start" wrap="nowrap">
-                    <div className="min-w-0">
-                      <Title order={3} lineClamp={2}>{project.name}</Title>
-                      <Text size="sm" c="dimmed" mt={4}>
-                        <span className="font-mono">/s/{project.slug}</span>
-                      </Text>
+              <Card key={project.id} withBorder radius="lg" padding="lg" className={styles.projectCard}>
+                <Stack gap="md" className={styles.cardStack}>
+                  <div className={styles.cardTop}>
+                    <div className={styles.projectIdentity}>
+                      <div className={styles.projectMark} aria-hidden="true">
+                        {project.name.trim().slice(0, 1).toUpperCase() || 'P'}
+                      </div>
+                      <div className="min-w-0">
+                        <Text className={styles.projectName} lineClamp={2}>{project.name}</Text>
+                        <span className={styles.slug}>/s/{project.slug}</span>
+                      </div>
                     </div>
-                    <Badge variant="light" color={project.status === 'archived' ? 'gray' : project.status === 'published' ? 'green' : 'indigo'}>
-                      {project.status === 'archived' ? 'Archivado' : project.status === 'published' ? 'Activo' : 'En preparación'}
+                    <Badge
+                      className={styles.statusBadge}
+                      variant="light"
+                      color={project.status === 'archived' ? 'gray' : project.status === 'published' ? 'green' : 'indigo'}
+                    >
+                      {project.status === 'archived' ? 'Archivado' : project.status === 'published' ? 'Publicado' : 'En preparación'}
                     </Badge>
-                  </Group>
+                  </div>
 
-                  <Group gap="xs">
+                  <div className={styles.statusLine} aria-label="Estado del contenido">
                     <Badge variant={project.hasDraft ? 'light' : 'default'} color={project.hasDraft ? 'indigo' : 'gray'}>
                       {project.hasDraft ? 'Borrador disponible' : 'Sin borrador'}
                     </Badge>
                     <Badge variant={project.hasPublished ? 'light' : 'default'} color={project.hasPublished ? 'green' : 'gray'}>
-                      {project.hasPublished ? 'Versión publicada' : 'Sin publicar'}
+                      {project.hasPublished ? 'Sitio publicado' : 'Sin publicar'}
                     </Badge>
-                  </Group>
+                  </div>
 
-                  <Text size="xs" c="dimmed">Actualizado {formatUpdatedAt(project.updatedAt)}</Text>
-
-                  <Group justify="space-between" mt="xs">
-                    <Group gap="xs">
+                  <div className={styles.cardFooter}>
+                    <Text className={styles.updatedAt}>Actualizado {formatUpdatedAt(project.updatedAt)}</Text>
+                    <div className={styles.cardActions}>
                       {project.hasDraft && (
-                        <Button onClick={() => openEditor(project)}>
+                        <Button size="sm" className={styles.primaryAction} onClick={() => openEditor(project)}>
                           {project.canEdit ? 'Abrir editor' : 'Ver borrador'}
                         </Button>
                       )}
-                      {project.canEdit && (
-                        <Button variant="default" onClick={() => openEditForm(project)}>
-                          Editar
-                        </Button>
+                      {project.hasPublished && (
+                        <Anchor className={styles.viewSite} href={`/s/${encodeURIComponent(project.slug)}`} target="_blank" rel="noreferrer" aria-label={`Ver sitio de ${project.name}`}>
+                          <span className="sr-only">Ver sitio</span>
+                          <ArrowUpRight size={17} aria-hidden="true" />
+                        </Anchor>
                       )}
-                      {project.canDelete && (
-                        <Button
-                          variant="subtle"
-                          color="red"
-                          onClick={() => {
-                            setProjectToDelete(project);
-                            setDeleteError('');
-                          }}
-                        >
-                          Eliminar
-                        </Button>
+                      {(project.canEdit || project.canDelete) && (
+                        <Menu position="bottom-end" withinPortal>
+                          <Menu.Target>
+                            <ActionIcon variant="subtle" color="gray" aria-label={`Acciones para ${project.name}`}>
+                              <MoreHorizontal size={19} aria-hidden="true" />
+                            </ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            {project.canEdit && (
+                              <Menu.Item leftSection={<Pencil size={15} />} onClick={() => openEditForm(project)}>
+                                Editar nombre y dirección
+                              </Menu.Item>
+                            )}
+                            {project.canDelete && (
+                              <Menu.Item
+                                color="red"
+                                leftSection={<Trash2 size={15} />}
+                                onClick={() => {
+                                  setProjectToDelete(project);
+                                  setDeleteError('');
+                                }}
+                              >
+                                Eliminar proyecto
+                              </Menu.Item>
+                            )}
+                          </Menu.Dropdown>
+                        </Menu>
                       )}
-                    </Group>
-                    {project.hasPublished && (
-                      <Anchor href={`/s/${encodeURIComponent(project.slug)}`} target="_blank" rel="noreferrer">
-                        Ver sitio
-                      </Anchor>
-                    )}
-                  </Group>
+                    </div>
+                  </div>
                 </Stack>
               </Card>
             ))}
@@ -324,9 +351,10 @@ export default function ProjectsDashboard() {
         onClose={() => setFormOpened(false)}
         title={formMode === 'create' ? 'Crear proyecto' : 'Editar proyecto'}
         centered
+        radius="lg"
       >
         <form onSubmit={submitProject}>
-          <Stack>
+          <Stack gap="md">
             {formError && <Alert color="red" role="alert">{formError}</Alert>}
             <TextInput
               label="Nombre del proyecto"
@@ -351,9 +379,10 @@ export default function ProjectsDashboard() {
               maxLength={160}
               required
             />
-            <Text size="sm" c="dimmed">
-              Dirección: /s/{slugifyProjectName(formSlug) || 'tu-proyecto'}
-            </Text>
+            <div className={styles.slugPreview}>
+              <span className={styles.slugPreviewLabel}>Dirección pública</span>
+              <code className={styles.slugPreviewValue}>/s/{slugifyProjectName(formSlug) || 'tu-proyecto'}</code>
+            </div>
             <Group justify="flex-end" mt="sm">
               <Button type="button" variant="default" onClick={() => setFormOpened(false)}>
                 Cancelar
@@ -371,8 +400,9 @@ export default function ProjectsDashboard() {
         onClose={() => setProjectToDelete(null)}
         title="Eliminar proyecto"
         centered
+        radius="lg"
       >
-        <Stack>
+        <Stack gap="md">
           {deleteError && <Alert color="red" role="alert">{deleteError}</Alert>}
           <Text>
             ¿Eliminar <strong>{projectToDelete?.name}</strong>? Se eliminarán su borrador y su versión publicada.
