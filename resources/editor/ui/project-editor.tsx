@@ -39,6 +39,7 @@ type ProjectSummary = {
   slug: string;
   status: 'draft' | 'published' | 'archived';
   updatedAt: string;
+  draftRevision: number;
   canEdit: boolean;
 };
 
@@ -47,6 +48,18 @@ type ProjectEditorResponse = {
   draftDocument?: SiteDocument;
   message?: string;
 };
+
+type SaveDraftResponse = {
+  project?: { draftRevision?: number };
+  error?: string;
+  message?: string;
+};
+
+type SaveStatus = 'saved' | 'saving' | 'error' | 'conflict';
+
+const AUTOSAVE_DELAY_MS = 600;
+
+class DraftConflictError extends Error {}
 
 type EditorData = {
   project: ProjectSummary;
@@ -214,14 +227,21 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [loadError, setLoadError] = useState('');
   const [propertyDraft, setPropertyDraft] = useState<BlockProps | null>(null);
   const [propertyErrors, setPropertyErrors] = useState<Record<string, string>>({});
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [saveError, setSaveError] = useState('');
+  const [reloadingDraft, setReloadingDraft] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [draggedBlock, setDraggedBlock] = useState<BlockSelection | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  // The last draft the server confirmed, and the server revision it was stored under. Each save
+  // sends that revision; the server rejects it if another tab saved a newer draft meanwhile.
   const lastSavedDraft = useRef('');
-  const saveRevision = useRef(0);
+  const serverDraftRevision = useRef(0);
+  const latestDraft = useRef<SiteDocument | null>(null);
+  const saveInFlight = useRef(false);
+  const saveQueued = useRef(false);
+  const draftConflict = useRef(false);
   const canvasBlockFrames = useRef(new Map<string, HTMLDivElement>());
   const dragTargetBounds = useRef(new Map<string, DOMRect>());
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
@@ -427,31 +447,75 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     }
   }
 
-  const saveDraftDocument = useCallback(async (documentToSave: SiteDocument) => {
-    const revision = ++saveRevision.current;
-    const serializedDraft = JSON.stringify(documentToSave);
-    setSaveStatus('saving');
-    setSaveError('');
+  /**
+   * Saves the latest local draft. Only one request runs at a time, so responses cannot arrive out
+   * of order; edits made while a request is pending are sent right after it with the new revision.
+   * Local changes are never discarded here: a failure only changes the status shown to the user.
+   */
+  const saveDraftDocument = useCallback(async () => {
+    if (draftConflict.current) return;
+    if (saveInFlight.current) {
+      saveQueued.current = true;
+      return;
+    }
 
+    saveInFlight.current = true;
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
-        method: 'PATCH',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftDocument: documentToSave }),
-      });
-      const result = await response.json().catch(() => ({})) as { message?: string };
-      if (!response.ok) throw new Error(result.message ?? 'No se pudo guardar el borrador.');
+      for (;;) {
+        saveQueued.current = false;
+        const documentToSave = latestDraft.current;
+        const serializedDraft = documentToSave ? JSON.stringify(documentToSave) : '';
+        if (!documentToSave || serializedDraft === lastSavedDraft.current) {
+          setSaveStatus('saved');
+          setSaveError('');
+          return;
+        }
 
-      if (revision === saveRevision.current) {
-        lastSavedDraft.current = serializedDraft;
-        setSaveStatus('saved');
+        setSaveStatus('saving');
+        setSaveError('');
+        try {
+          const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+            method: 'PATCH',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftDocument: documentToSave,
+              draftRevision: serverDraftRevision.current,
+            }),
+          });
+          const result = await response.json().catch(() => ({})) as SaveDraftResponse;
+          if (response.status === 409 && result.error === 'project_draft_conflict') {
+            throw new DraftConflictError(result.message ?? 'Hay una versión más reciente del borrador.');
+          }
+          if (!response.ok) throw new Error(result.message ?? 'No se pudo guardar el borrador.');
+          if (typeof result.project?.draftRevision !== 'number') {
+            throw new Error('El servidor no confirmó la revisión guardada.');
+          }
+
+          serverDraftRevision.current = result.project.draftRevision;
+          lastSavedDraft.current = serializedDraft;
+        } catch (error) {
+          if (error instanceof DraftConflictError) {
+            draftConflict.current = true;
+            setSaveStatus('conflict');
+          } else {
+            setSaveStatus('error');
+          }
+          setSaveError(error instanceof Error ? error.message : 'No se pudo guardar el borrador.');
+          return;
+        }
+
+        if (!saveQueued.current) {
+          const latestSerialized = latestDraft.current ? JSON.stringify(latestDraft.current) : '';
+          // Newer edits still waiting for their pause keep the "saving" state until they are sent.
+          if (latestSerialized === lastSavedDraft.current) {
+            setSaveStatus('saved');
+          }
+          return;
+        }
       }
-    } catch (error) {
-      if (revision === saveRevision.current) {
-        setSaveStatus('error');
-        setSaveError(error instanceof Error ? error.message : 'No se pudo guardar el borrador.');
-      }
+    } finally {
+      saveInFlight.current = false;
     }
   }, [projectId]);
 
@@ -844,19 +908,33 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   useHotkeys(hotkeys, [], true);
 
   useEffect(() => {
-    if (!editorData?.project.canEdit || !currentDraftJson) return;
+    latestDraft.current = editorData?.draftDocument ?? null;
+    if (!editorData?.project.canEdit || !currentDraftJson || draftConflict.current) return;
     if (currentDraftJson === lastSavedDraft.current) {
-      setSaveStatus('saved');
-      setSaveError('');
+      if (!saveInFlight.current) {
+        setSaveStatus('saved');
+        setSaveError('');
+      }
       return;
     }
 
+    setSaveStatus('saving');
     const timeout = window.setTimeout(() => {
-      void saveDraftDocument(editorData.draftDocument);
-    }, 600);
+      void saveDraftDocument();
+    }, AUTOSAVE_DELAY_MS);
 
     return () => window.clearTimeout(timeout);
   }, [currentDraftJson, editorData?.project.canEdit, editorData?.draftDocument, saveDraftDocument]);
+
+  const hasUnsavedChanges = saveStatus !== 'saved';
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     if (!selection) return;
@@ -869,42 +947,76 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       ?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
   }, [selection]);
 
+  const applyLoadedDraft = useCallback((result: ProjectEditorResponse, keepSelection: boolean) => {
+    if (!result.project || !result.draftDocument) {
+      throw new Error('La respuesta no incluye el borrador del proyecto.');
+    }
+    const { project, draftDocument } = result;
+
+    setEditorData({ project, draftDocument });
+    setHistory({ past: [], future: [] });
+    latestDraft.current = draftDocument;
+    lastSavedDraft.current = JSON.stringify(draftDocument);
+    serverDraftRevision.current = project.draftRevision;
+    draftConflict.current = false;
+    setSaveStatus('saved');
+    setSaveError('');
+
+    const keptBlock = keepSelection && selection
+      ? draftDocument.pages.find((page) => page.id === selection.pageId)
+        ?.blocks.find((block) => block.id === selection.blockId)
+      : undefined;
+    const firstPage = draftDocument.pages[0];
+    const nextSelection = keptBlock && selection
+      ? selection
+      : firstPage?.blocks[0] ? { pageId: firstPage.id, blockId: firstPage.blocks[0].id } : null;
+    const nextBlock = keptBlock ?? firstPage?.blocks[0];
+
+    setSelection(nextSelection);
+    if (nextSelection && nextBlock) {
+      const def = portfolioBlockRegistry.get(nextBlock.type);
+      setPropertyDraft(def?.defaultProps
+        ? { ...def.defaultProps, ...nextBlock.props }
+        : structuredClone(nextBlock.props));
+    } else {
+      setPropertyDraft(null);
+    }
+    setPropertyErrors({});
+  }, [selection]);
+
+  async function fetchProjectDraft(signal?: AbortSignal) {
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+      cache: 'no-store',
+      signal,
+    });
+    const result = await response.json() as ProjectEditorResponse;
+    if (!response.ok) {
+      throw new Error(result.message ?? 'No se pudo cargar el borrador del proyecto.');
+    }
+    return result;
+  }
+
+  async function reloadLatestDraft() {
+    setReloadingDraft(true);
+    try {
+      applyLoadedDraft(await fetchProjectDraft(), true);
+    } catch (error) {
+      setSaveError(error instanceof Error
+        ? error.message
+        : 'No se pudo cargar la versión más reciente. Inténtalo de nuevo.');
+    } finally {
+      setReloadingDraft(false);
+    }
+  }
+
+  const fetchInitialDraft = useRef(fetchProjectDraft);
+  const applyInitialDraft = useRef(applyLoadedDraft);
+
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-      .then(async (response) => ({
-        response,
-        result: await response.json() as ProjectEditorResponse,
-      }))
-      .then(({ response, result }) => {
-        if (!response.ok) {
-          throw new Error(result.message ?? 'No se pudo cargar el borrador del proyecto.');
-        }
-        if (!result.project || !result.draftDocument) {
-          throw new Error('La respuesta no incluye el borrador del proyecto.');
-        }
-
-        setEditorData({ project: result.project, draftDocument: result.draftDocument });
-        setHistory({ past: [], future: [] });
-        lastSavedDraft.current = JSON.stringify(result.draftDocument);
-        setSaveStatus('saved');
-        const firstPage = result.draftDocument.pages[0];
-        const firstBlock = firstPage?.blocks[0];
-        if (firstPage && firstBlock) {
-          const initialSelection = { pageId: firstPage.id, blockId: firstBlock.id };
-          setSelection(initialSelection);
-          const def = portfolioBlockRegistry.get(firstBlock.type);
-          const initialProps = def?.defaultProps
-            ? { ...def.defaultProps, ...firstBlock.props }
-            : structuredClone(firstBlock.props);
-          setPropertyDraft(initialProps);
-          setPropertyErrors({});
-        }
-      })
+    fetchInitialDraft.current(controller.signal)
+      .then((result) => applyInitialDraft.current(result, false))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setLoadError(error instanceof Error
@@ -925,8 +1037,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
           <div className={styles.editorHeading}>
             <Title order={1} className={styles.editorTitle}>{editorData?.project.name ?? 'Proyecto'}</Title>
             {editorData && (
-              <Badge className={styles.saveBadge} color={saveStatus === 'error' ? 'red' : saveStatus === 'saving' ? 'yellow' : 'green'} variant="light">
-                {saveStatus === 'saving' ? 'Guardando…' : saveStatus === 'error' ? 'Error al guardar' : 'Guardado'}
+              <Badge
+                className={styles.saveBadge}
+                role="status"
+                color={saveStatus === 'saved' ? 'green' : saveStatus === 'saving' ? 'yellow' : 'red'}
+                variant="light"
+              >
+                {saveStatus === 'saving' ? 'Guardando…' : saveStatus === 'saved' ? 'Guardado' : 'Error al guardar'}
               </Badge>
             )}
           </div>
@@ -945,10 +1062,33 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                 variant="light"
                 disabled={!editorData?.project.canEdit}
                 onClick={() => {
-                  if (editorData) void saveDraftDocument(editorData.draftDocument);
+                  void saveDraftDocument();
                 }}
               >
                 Reintentar guardado
+              </Button>
+            </Stack>
+          </Alert>
+        )}
+
+        {saveStatus === 'conflict' && (
+          <Alert color="red" title="Hay una versión más reciente del borrador" role="alert">
+            <Stack gap="sm">
+              <Text size="sm">{saveError}</Text>
+              <Text size="sm">
+                Tus cambios siguen visibles aquí, pero no se guardarán sobre la versión más reciente.
+                Cópialos si los necesitas y carga la última versión para seguir editando.
+              </Text>
+              <Button
+                size="xs"
+                color="red"
+                variant="light"
+                loading={reloadingDraft}
+                onClick={() => {
+                  void reloadLatestDraft();
+                }}
+              >
+                Cargar versión más reciente
               </Button>
             </Stack>
           </Alert>

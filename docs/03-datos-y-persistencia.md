@@ -68,6 +68,7 @@ Al crear una cuenta, el servidor crea también su fila local usando el ID y el e
 - slug
 - status
 - draft_document_json
+- draft_revision
 - published_version_id
 - created_at
 - updated_at
@@ -79,7 +80,7 @@ operación la columna indexada `projects.slug` y `draft_document_json.site.slug`
 
 `created_by` conserva quién creó el proyecto, pero no concede acceso. La autorización se deriva de `project_members`. Cada proyecto tiene un único rol de sistema `owner`, asignable a un máximo de tres membresías activas. Al crear el proyecto, se crean en una sola transacción el rol y la membresía owner inicial. Siempre debe quedar al menos un owner activo.
 
-`draft_document_json` conserva el `SiteDocument` completo como JSON validado por la aplicación y por la restricción `json_valid` de D1. El slug se mantiene también en la columna indexada para resolver `/s/:slug`; ambas copias deben actualizarse juntas.
+`draft_document_json` conserva el `SiteDocument` completo como JSON validado por la aplicación y por la restricción `json_valid` de D1. `draft_revision` es un entero que empieza en 0 y aumenta en cada escritura que modifica el borrador, incluido el cambio de slug. Guardar un borrador exige enviar la revisión base; la actualización incluye `draft_revision = base` en su condición, de modo que una copia antigua no sobrescribe una más reciente y el servidor responde con conflicto. El slug se mantiene también en la columna indexada para resolver `/s/:slug`; ambas copias deben actualizarse juntas.
 
 Cada proyecto nuevo parte de la plantilla de portafolio como un `SiteDocument`
 v1. El servidor crea el proyecto, el rol `owner` y su membresía inicial en el

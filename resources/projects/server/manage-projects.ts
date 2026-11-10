@@ -27,6 +27,20 @@ export class ProjectManagementError extends Error {
   }
 }
 
+/**
+ * The draft was saved by another tab or person after the client loaded its base revision.
+ * Rejecting the write keeps an older copy from overwriting a newer one.
+ */
+export class ProjectDraftConflictError extends Error {
+  readonly code = 'project_draft_conflict';
+  readonly status = 409;
+
+  constructor() {
+    super('Hay una versión más reciente del borrador guardada desde otra pestaña o sesión.');
+    this.name = 'ProjectDraftConflictError';
+  }
+}
+
 export async function listProjects(database: D1Database, authUser: AuthUser) {
   try {
     const db = createDb(database);
@@ -117,6 +131,7 @@ export async function getProjectDraft(
         slug: projects.slug,
         status: projects.status,
         updatedAt: projects.updatedAt,
+        draftRevision: projects.draftRevision,
         draftDocumentJson: projects.draftDocumentJson,
         canEdit: sql<number>`CASE WHEN ${projectPermissionPredicate(
           authUser.id,
@@ -140,6 +155,7 @@ export async function getProjectDraft(
         slug: row.slug,
         status: row.status,
         updatedAt: row.updatedAt,
+        draftRevision: row.draftRevision,
         canEdit: row.canEdit === 1,
       },
       draftDocument: projectDocumentSchema.parse(JSON.parse(row.draftDocumentJson) as unknown),
@@ -154,13 +170,14 @@ export async function updateProject(
   database: D1Database,
   authUser: AuthUser,
   projectId: string,
-  details: { name?: string; slug?: string; draftDocument?: unknown },
+  details: { name?: string; slug?: string; draftDocument?: unknown; draftRevision?: number },
 ) {
   if (typeof projectId !== 'string' || !projectId.trim()) throw projectAccessDenied();
 
   try {
     const db = createDb(database);
     let validatedDraft;
+    let baseDraftRevision: number | undefined;
     if (details.draftDocument !== undefined) {
       const parsedDraft = projectDocumentSchema.safeParse(details.draftDocument);
       if (!parsedDraft.success) {
@@ -176,7 +193,16 @@ export async function updateProject(
       nextValues.draftDocumentJson = sql<string>`json_set(${projects.draftDocumentJson}, '$.site.slug', ${details.slug})`;
     }
     if (validatedDraft !== undefined) {
+      if (details.draftRevision === undefined) {
+        throw new ProjectInputError('Envía el borrador junto con la revisión sobre la que se editó.');
+      }
+      baseDraftRevision = details.draftRevision;
       nextValues.draftDocumentJson = JSON.stringify(validatedDraft);
+    }
+    // Every write that changes draft_document_json advances the revision, so a client that
+    // edited an older copy is rejected instead of overwriting it.
+    if (nextValues.draftDocumentJson !== undefined) {
+      nextValues.draftRevision = sql<number>`${projects.draftRevision} + 1`;
     }
 
     const [updated] = await db
@@ -191,6 +217,9 @@ export async function updateProject(
               WHERE conflicting.slug = ${details.slug}
                 AND conflicting.id <> ${projectId}
             )`,
+        baseDraftRevision === undefined
+          ? sql`1 = 1`
+          : eq(projects.draftRevision, baseDraftRevision),
         projectPermissionPredicate(authUser.id, projectId, 'project:update'),
       ))
       .returning({
@@ -198,12 +227,13 @@ export async function updateProject(
         name: projects.name,
         slug: projects.slug,
         updatedAt: projects.updatedAt,
+        draftRevision: projects.draftRevision,
       });
 
     if (updated) return updated;
 
     const [accessibleProject] = await db
-      .select({ id: projects.id })
+      .select({ id: projects.id, draftRevision: projects.draftRevision })
       .from(projects)
       .where(and(
         eq(projects.id, projectId),
@@ -212,10 +242,18 @@ export async function updateProject(
       .limit(1);
 
     if (!accessibleProject) throw projectAccessDenied();
+    if (baseDraftRevision !== undefined && accessibleProject.draftRevision !== baseDraftRevision) {
+      throw new ProjectDraftConflictError();
+    }
     if (details.slug !== undefined) throw new ProjectSlugConflictError();
     throw new ProjectManagementError();
   } catch (error) {
-    if (error instanceof ProjectAccessError || error instanceof ProjectSlugConflictError || error instanceof ProjectInputError) throw error;
+    if (
+      error instanceof ProjectAccessError
+      || error instanceof ProjectSlugConflictError
+      || error instanceof ProjectDraftConflictError
+      || error instanceof ProjectInputError
+    ) throw error;
     if (isProjectSlugConstraintError(error)) throw new ProjectSlugConflictError();
     throw new ProjectManagementError();
   }

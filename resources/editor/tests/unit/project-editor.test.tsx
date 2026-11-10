@@ -59,6 +59,7 @@ describe('ProjectEditor properties panel', () => {
           slug: 'alex-rivera',
           status: 'draft',
           updatedAt: '2026-10-27T00:00:00.000Z',
+          draftRevision: 0,
           canEdit: true,
         },
         draftDocument,
@@ -344,6 +345,7 @@ describe('ProjectEditor properties panel', () => {
           slug: 'alex-rivera',
           status: 'draft',
           updatedAt: '2026-10-27T00:00:00.000Z',
+          draftRevision: 0,
           canEdit: false,
         },
         draftDocument,
@@ -352,5 +354,153 @@ describe('ProjectEditor properties panel', () => {
 
     renderEditor();
     expect(await screen.findByLabelText('Titular')).toBeDisabled();
+  });
+});
+
+describe('ProjectEditor autosave', () => {
+  const fetchMock = vi.fn<typeof fetch>();
+  const draftDocument = createPortfolioTemplate('Alex Rivera', 'alex-rivera');
+
+  function projectResponse(revision: number, document = draftDocument) {
+    return jsonResponse({
+      project: {
+        id: 'project-1',
+        name: 'Alex Rivera',
+        slug: 'alex-rivera',
+        status: 'draft',
+        updatedAt: '2026-10-27T00:00:00.000Z',
+        draftRevision: revision,
+        canEdit: true,
+      },
+      draftDocument: document,
+    });
+  }
+
+  function patchBodies() {
+    return fetchMock.mock.calls
+      .filter(([, init]) => init?.method === 'PATCH')
+      .map(([, init]) => JSON.parse(String(init?.body)) as {
+        draftDocument: typeof draftDocument;
+        draftRevision: number;
+      });
+  }
+
+  function headlineOf(document: typeof draftDocument) {
+    return document.pages[0].blocks[0].props.headline;
+  }
+
+  beforeEach(() => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    Element.prototype.scrollIntoView = vi.fn();
+    document.fonts = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as FontFaceSet;
+    vi.stubGlobal('ResizeObserver', class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('saves after a short pause with the base revision and shows the save states', async () => {
+    let revision = 7;
+    fetchMock.mockImplementation(async (_input, init) => {
+      if (init?.method === 'PATCH') {
+        revision += 1;
+        return jsonResponse({ project: { draftRevision: revision } });
+      }
+      return projectResponse(revision);
+    });
+    renderEditor();
+
+    const headline = await screen.findByLabelText('Titular');
+    fireEvent.change(headline, { target: { value: 'First headline' } });
+    expect(screen.getByRole('status')).toHaveTextContent('Guardando…');
+    expect(patchBodies()).toHaveLength(0);
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Guardado'));
+    expect(patchBodies()).toEqual([expect.objectContaining({ draftRevision: 7 })]);
+
+    fireEvent.change(headline, { target: { value: 'Second headline' } });
+    await waitFor(() => expect(patchBodies()).toHaveLength(2));
+    expect(patchBodies()[1].draftRevision).toBe(8);
+    expect(headlineOf(patchBodies()[1].draftDocument)).toBe('Second headline');
+  });
+
+  it('waits for the pending save before sending newer edits', async () => {
+    let releaseFirstSave: (response: Response) => void = () => {};
+    let patchCount = 0;
+    fetchMock.mockImplementation(async (_input, init) => {
+      if (init?.method !== 'PATCH') return projectResponse(1);
+      patchCount += 1;
+      if (patchCount === 1) {
+        return new Promise<Response>((resolve) => { releaseFirstSave = resolve; });
+      }
+      return jsonResponse({ project: { draftRevision: 3 } });
+    });
+    renderEditor();
+
+    const headline = await screen.findByLabelText('Titular');
+    fireEvent.change(headline, { target: { value: 'First headline' } });
+    await waitFor(() => expect(patchBodies()).toHaveLength(1));
+
+    fireEvent.change(headline, { target: { value: 'Newer headline' } });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(patchBodies()).toHaveLength(1);
+
+    releaseFirstSave(jsonResponse({ project: { draftRevision: 2 } }));
+    await waitFor(() => expect(patchBodies()).toHaveLength(2));
+    expect(patchBodies()[1]).toMatchObject({ draftRevision: 2 });
+    expect(headlineOf(patchBodies()[1].draftDocument)).toBe('Newer headline');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Guardado'));
+  });
+
+  it('keeps local changes on a conflict and stops saving over the newer version', async () => {
+    const newerDocument = structuredClone(draftDocument);
+    newerDocument.pages[0].blocks[0].props.headline = 'Saved from another tab';
+    let loads = 0;
+    fetchMock.mockImplementation(async (_input, init) => {
+      if (init?.method === 'PATCH') {
+        return jsonResponse({ error: 'project_draft_conflict', message: 'Hay una versión más reciente.' }, 409);
+      }
+      loads += 1;
+      return loads === 1 ? projectResponse(1) : projectResponse(4, newerDocument);
+    });
+    renderEditor();
+
+    const headline = await screen.findByLabelText('Titular');
+    fireEvent.change(headline, { target: { value: 'Stale headline' } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hay una versión más reciente del borrador');
+    expect(screen.getByRole('status')).toHaveTextContent('Error al guardar');
+    expect(screen.getByLabelText('Titular')).toHaveValue('Stale headline');
+    expect(screen.queryByRole('button', { name: 'Reintentar guardado' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Titular'), { target: { value: 'Still stale' } });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(patchBodies()).toHaveLength(1);
+    expect(screen.getByLabelText('Titular')).toHaveValue('Still stale');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cargar versión más reciente' }));
+    await waitFor(() => expect(screen.getByLabelText('Titular')).toHaveValue('Saved from another tab'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Guardado');
   });
 });

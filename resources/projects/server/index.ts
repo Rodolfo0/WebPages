@@ -13,6 +13,7 @@ export {
   deleteProject,
   getProjectDraft,
   listProjects,
+  ProjectDraftConflictError,
   ProjectManagementError,
   updateProject,
 } from './manage-projects';
