@@ -36,8 +36,12 @@ describe('password recovery interface', () => {
   it('offers the password form after recovery and passes only the internal identity', async () => {
     window.history.replaceState({}, '', '/?auth=recovery');
     fetchMock.mockResolvedValue(response({ authenticated: true, user }));
-    render(<AuthPlayground />);
+    const navigate = vi.fn();
+    render(<AuthPlayground navigate={navigate} />);
     expect(await screen.findByRole('form', { name: 'Cambiar contraseña' })).toBeInTheDocument();
+    window.dispatchEvent(new Event('focus'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(navigate).not.toHaveBeenCalled();
     expect(screen.getByText('Cuenta: ' + user.email)).toBeVisible();
     expect(window.location.search).toBe('');
   });

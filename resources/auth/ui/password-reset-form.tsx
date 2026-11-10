@@ -69,7 +69,7 @@ export default function PasswordResetForm({ user, onComplete, onSessionInvalid, 
           {busy ? 'Guardando…' : 'Guardar contraseña'}
         </button>
         {onCancel && <button type="button" onClick={onCancel} disabled={busy}
-          className={styles.textButton}>Volver a mi cuenta</button>}
+          className={styles.textButton}>Omitir e ir a mis proyectos</button>}
       </div>
     </form>
   );

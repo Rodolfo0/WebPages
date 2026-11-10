@@ -24,9 +24,9 @@ test('login validates the server session and logout clears it', async ({ page })
   expect(loginResponse.status()).toBe(200);
   expect(await loginResponse.json()).toMatchObject({ authenticated: true });
 
-  await expect(page.getByText('Sesión iniciada', { exact: true })).toBeVisible();
-  await expect(page.getByText(confirmedEmail)).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/projects$/);
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+  await expect(page).toHaveURL(/\/$/);
 
   await expect(page.locator('form').getByRole('button', { name: 'Iniciar sesión', exact: true })).toBeEnabled();
   const sessionResponse = await page.evaluate(async () => {

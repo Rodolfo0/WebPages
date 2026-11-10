@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { LayoutTemplate, MonitorSmartphone, Rocket } from 'lucide-react';
 import type { AuthUser } from '../domain/auth';
 import PasswordResetForm from './password-reset-form';
 import styles from './auth.module.css';
@@ -18,7 +19,13 @@ type ApiResult = {
   message?: string;
 };
 
-export default function AuthPlayground() {
+const PROJECTS_PATH = '/app/projects';
+
+function replaceLocation(path: string) {
+  window.location.replace(path);
+}
+
+export default function AuthPlayground({ navigate = replaceLocation }: { navigate?: (path: string) => void } = {}) {
   const [view, setView] = useState<ViewState>('loading');
   const [mode, setMode] = useState<Mode>('login');
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -31,22 +38,33 @@ export default function AuthPlayground() {
   const [canResendConfirmation, setCanResendConfirmation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [wantsPasswordReset, setWantsPasswordReset] = useState(false);
+  // Keeps the recovery form open even when focus revalidates the session.
+  const passwordResetPending = useRef(false);
+  const navigateRef = useRef(navigate);
   const signupPasswordStep = mode === 'signup' && checkedSignupEmail === email;
   const signupEmailStep = mode === 'signup' && !signupPasswordStep;
   const heading = view === 'signed_in'
-    ? 'Tu cuenta'
+    ? wantsPasswordReset ? 'Recupera el acceso' : 'Abriendo tus proyectos'
     : mode === 'signup'
       ? 'Crea tu cuenta'
       : mode === 'recover'
         ? 'Recupera el acceso'
         : 'Vuelve a tus proyectos';
   const description = view === 'signed_in'
-    ? 'Administra tus sitios y la información de tu cuenta.'
+    ? wantsPasswordReset ? 'Guarda una contraseña nueva para tu cuenta.' : 'Tu sesión está activa. Te llevamos a tus proyectos.'
     : mode === 'signup'
       ? 'Crea un espacio para diseñar y publicar tu portafolio.'
       : mode === 'recover'
         ? 'Te enviaremos instrucciones para recuperar tu cuenta.'
         : 'Inicia sesión para continuar con tus proyectos.';
+
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
+  function goToProjects() {
+    navigateRef.current(PROJECTS_PATH);
+  }
 
   async function refreshSession(requireRecoverySession = false) {
     try {
@@ -62,6 +80,7 @@ export default function AuthPlayground() {
       if (response.ok && result.authenticated && result.user) {
         setUser(result.user);
         setView('signed_in');
+        if (!requireRecoverySession && !passwordResetPending.current) navigateRef.current(PROJECTS_PATH);
         return;
       }
 
@@ -95,6 +114,7 @@ export default function AuthPlayground() {
       setError('El enlace venció o ya se usó. Escribe tu correo y solicita uno nuevo.');
       setCanResendConfirmation(true);
     } else if (authResult === 'recovery') {
+      passwordResetPending.current = true;
       setWantsPasswordReset(true);
     } else if (authResult === 'recovery_error' || authResult === 'recovery_link_expired') {
       setMode('recover');
@@ -187,31 +207,6 @@ export default function AuthPlayground() {
       }
 
       await refreshSession();
-      setMessage(mode === 'signup' ? 'Registro completado.' : 'Sesión iniciada.');
-    } catch {
-      setError('No se pudo conectar con el servidor de autenticación.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function signOut() {
-    setBusy(true);
-    setError('');
-    setMessage('');
-
-    try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' });
-      const result = (await response.json()) as ApiResult;
-      if (!response.ok) {
-        setError(result.message ?? 'No se pudo cerrar la sesión.');
-        return;
-      }
-
-      setUser(null);
-      setView('signed_out');
-      setWantsPasswordReset(false);
-      setMessage('Sesión cerrada.');
     } catch {
       setError('No se pudo conectar con el servidor de autenticación.');
     } finally {
@@ -249,7 +244,23 @@ export default function AuthPlayground() {
 
   return (
     <main className={styles.authPage}>
-      <div className={styles.authShell}>
+      <aside className={styles.showcase} aria-label="Site Creator">
+        <BrandMark />
+        <div className={styles.showcaseCopy}>
+          <p className={styles.showcaseTitle}>Diseña tu portafolio sección por sección.</p>
+          <p className={styles.showcaseText}>
+            Combina bloques listos, edita su contenido y revisa cómo se ve en escritorio y móvil antes de publicar.
+          </p>
+        </div>
+        <EditorPreview />
+        <ul className={styles.featureList}>
+          <li><LayoutTemplate size={16} aria-hidden="true" /> Secciones listas para usar</li>
+          <li><MonitorSmartphone size={16} aria-hidden="true" /> Vista previa adaptable</li>
+          <li><Rocket size={16} aria-hidden="true" /> Publica cuando esté listo</li>
+        </ul>
+      </aside>
+      <div className={styles.formPanel}>
+        <div className={styles.formPanelBrand}><BrandMark /></div>
         <section className={styles.authCard}>
           <p className={styles.authEyebrow}>Tu espacio creativo</p>
           <h1 className={styles.authTitle}>{heading}</h1>
@@ -257,10 +268,11 @@ export default function AuthPlayground() {
 
           {view === 'signed_in' && user ? (
             wantsPasswordReset ? (
-              <PasswordResetForm user={user} onCancel={() => setWantsPasswordReset(false)} onComplete={() => {
-                setWantsPasswordReset(false);
-                setMessage('Contraseña actualizada.');
+              <PasswordResetForm user={user} onCancel={goToProjects} onComplete={() => {
+                passwordResetPending.current = false;
+                goToProjects();
               }} onSessionInvalid={() => {
+                passwordResetPending.current = false;
                 setWantsPasswordReset(false);
                 setUser(null);
                 setView('signed_out');
@@ -268,29 +280,10 @@ export default function AuthPlayground() {
                 setError('Tu sesión venció. Solicita un enlace de recuperación nuevo.');
               }} />
             ) : (
-            <div className={`${styles.accountPanel} ${styles.authBody}`}>
-              <div>
-                <p className={styles.accountStatus}>Sesión iniciada</p>
-                <p className={styles.accountEmail}>{user.email}</p>
-              </div>
-              <div className={styles.accountActions}>
-                <a href="/app/projects" className={styles.primaryButton}>
-                  Ir a proyectos
-                </a>
-                <button
-                  type="button"
-                  onClick={signOut}
-                  disabled={busy}
-                  className={styles.secondaryButton}
-                >
-                  {busy ? 'Procesando…' : 'Cerrar sesión'}
-                </button>
-              </div>
-              <button type="button" onClick={() => setWantsPasswordReset(true)}
-                className={styles.textButton}>
-                Cambiar contraseña
-              </button>
-            </div>
+              <p role="status" className={`${styles.redirecting} ${styles.authBody}`}>
+                <span className={styles.spinner} aria-hidden="true" />
+                Redirigiendo…
+              </p>
             )
           ) : (
             <div className={styles.authBody}>
@@ -460,16 +453,46 @@ export default function AuthPlayground() {
             </div>
           )}
 
-          {view === 'signed_in' && (message || error) && <div className={`${styles.signedInMessages} ${styles.authBody}`}>
-            {message && (
-              <p role="status" className={styles.notice} data-tone="success">{message}</p>
-            )}
-            {error && (
-              <p role="alert" className={styles.notice} data-tone="error">{error}</p>
-            )}
-          </div>}
         </section>
+        <p className={styles.formFooter}>Tu acceso está protegido con autenticación segura.</p>
       </div>
     </main>
+  );
+}
+
+function BrandMark() {
+  return (
+    <span className={styles.brand}>
+      <svg className={styles.brandLogo} viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M22 19.27A2.73 2.73 0 0 1 19.27 22h-4.54A2.73 2.73 0 0 1 12 19.27V12h7.27A2.73 2.73 0 0 1 22 14.73z" fill="#68C4FF" />
+        <path d="M20 2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#0C79D8" />
+        <path d="M7 15a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z" fill="#0C79D8" />
+        <path d="M12 12H4.73A2.73 2.73 0 0 1 2 9.27V4.73A2.73 2.73 0 0 1 4.73 2h4.54A2.73 2.73 0 0 1 12 4.73z" fill="#2E9EFF" />
+      </svg>
+      Site Creator
+    </span>
+  );
+}
+
+function EditorPreview() {
+  return (
+    <div className={styles.preview} aria-hidden="true">
+      <div className={styles.previewBar}>
+        <span /><span /><span />
+      </div>
+      <div className={styles.previewBody}>
+        <div className={styles.previewSidebar}>
+          <i data-active="true" /><i /><i /><i />
+        </div>
+        <div className={styles.previewCanvas}>
+          <div className={styles.previewHero}>
+            <b /><b /><b />
+          </div>
+          <div className={styles.previewGrid}>
+            <span /><span /><span />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
