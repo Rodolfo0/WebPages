@@ -2,7 +2,7 @@
 
 import React from 'react';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthPlayground from '../../ui/auth-playground';
 
@@ -60,5 +60,38 @@ describe('AuthPlayground in JSDOM', () => {
         body: JSON.stringify({ email: 'new-user@example.test' }),
       }),
     );
+  });
+
+  it('redirects to projects when a session already exists', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ authenticated: true, user: { id: 'user-1', email: 'user@example.test' } }, 200));
+    const navigate = vi.fn();
+    render(<AuthPlayground navigate={navigate} />);
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/app/projects'));
+    expect(screen.getByRole('status')).toHaveTextContent('Redirigiendo');
+    expect(screen.queryByRole('button', { name: 'Cerrar sesión' })).not.toBeInTheDocument();
+  });
+
+  it('redirects to projects right after logging in', async () => {
+    let authenticated = false;
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).includes('/api/auth/login')) {
+        authenticated = true;
+        return jsonResponse({ authenticated: true }, 200);
+      }
+      return authenticated
+        ? jsonResponse({ authenticated: true, user: { id: 'user-1', email: 'user@example.test' } }, 200)
+        : jsonResponse({ authenticated: false }, 401);
+    });
+    const navigate = vi.fn();
+    render(<AuthPlayground navigate={navigate} />);
+
+    const submit = screen.getAllByRole('button', { name: 'Iniciar sesión', exact: true }).at(-1)!;
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Correo electrónico'), { target: { value: 'user@example.test' } });
+    fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'test-password' } });
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/app/projects'));
   });
 });

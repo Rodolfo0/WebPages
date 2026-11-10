@@ -21,8 +21,9 @@ pnpm test:e2e
   contraseña sin usuario y la preparación/validación de estado del enlace de
   recuperación sin enviar correos ni consumir un token real.
 - `test:e2e` recorre la interfaz con Playwright: inicia sesión con una cuenta de
-  prueba ya confirmada, valida la sesión en el servidor y cierra sesión. No crea
-  cuentas ni envía correos.
+  prueba ya confirmada, comprueba la redirección a `/app/projects`, cierra sesión
+  desde el panel de proyectos y valida en el servidor que la sesión terminó. No
+  crea cuentas ni envía correos.
 
 ### Ubicación de las pruebas
 

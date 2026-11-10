@@ -38,8 +38,8 @@ El resto de la aplicación recibe `{ id, email }`, con email obligatorio, no un 
 
 - Registro en dos pasos: comprobar el email y después solicitar contraseña y confirmación. La UI exige que ambas contraseñas coincidan antes de enviar el registro; la confirmación no se incluye en el payload.
 - Confirmación de email cuando el proveedor lo requiera.
-- Inicio de sesión.
-- Cierre de sesión.
+- Inicio de sesión. Cuando `/api/auth/session` confirma una sesión válida, la pantalla de acceso (`/`) redirige con `location.replace` a `/app/projects`, tanto después del login como al visitarla con una sesión activa. La única excepción es el regreso de un enlace de recuperación (`/?auth=recovery`), que muestra el formulario de nueva contraseña y redirige al guardarla u omitirla.
+- Cierre de sesión desde el panel de proyectos, que vuelve a `/`.
 - Recuperación y cambio de contraseña mediante el proveedor.
 - Renovación y expiración de sesión.
 - Mensaje claro para una sesión inválida o expirada.

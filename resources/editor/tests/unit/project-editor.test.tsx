@@ -120,7 +120,7 @@ describe('ProjectEditor properties panel', () => {
     renderEditor();
 
     const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' }).catch(() => screen.getByLabelText('Canvas del sitio'));
-    const previewBlocks = () => within(canvas).getAllByRole('button');
+    const previewBlocks = () => within(canvas).getAllByRole('button', { name: /Seleccionar sección/ });
     const initialTitles = previewBlocks().map((button) => button.getAttribute('aria-label')?.split(': ').slice(1).join(': '));
     const secondBlock = previewBlocks()[1];
     const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
@@ -160,7 +160,7 @@ describe('ProjectEditor properties panel', () => {
     renderEditor();
 
     const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' });
-    const previewBlock = within(canvas).getAllByRole('button')[1];
+    const previewBlock = within(canvas).getAllByRole('button', { name: /Seleccionar sección/ })[1];
     fireEvent.keyDown(previewBlock, { key: 'Del' });
 
     expect(await screen.findByRole('dialog')).toHaveTextContent('¿Seguro que quieres eliminar Sobre mí?');
@@ -193,7 +193,7 @@ describe('ProjectEditor properties panel', () => {
     renderEditor();
 
     const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' });
-    const previewBlocks = () => within(canvas).getAllByRole('button');
+    const previewBlocks = () => within(canvas).getAllByRole('button', { name: /Seleccionar sección/ });
     const originalTitle = previewBlocks()[1].getAttribute('aria-label')?.split(': ').slice(1).join(': ');
 
     fireEvent.keyDown(previewBlocks()[1], { key: 'D', shiftKey: true });
@@ -231,7 +231,7 @@ describe('ProjectEditor properties panel', () => {
     renderEditor();
 
     const canvas = await screen.findByRole('region', { name: 'Canvas del sitio' });
-    const previewBlocks = () => within(canvas).getAllByRole('button');
+    const previewBlocks = () => within(canvas).getAllByRole('button', { name: /Seleccionar sección/ });
     const firstTitle = previewBlocks()[0].getAttribute('aria-label')?.split(': ').slice(1).join(': ');
     const draggedTitle = previewBlocks()[2].getAttribute('aria-label')?.split(': ').slice(1).join(': ');
 

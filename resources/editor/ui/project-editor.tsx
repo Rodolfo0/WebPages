@@ -919,22 +919,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   return (
-    <main data-editor-command-scope="editor" className="min-h-dvh bg-slate-50 px-4 py-6 text-slate-900 sm:px-8">
-      <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <Text size="sm" fw={700} c="indigo" tt="uppercase">Editor</Text>
-            <Title order={1} mt={4}>{editorData?.project.name ?? 'Proyecto'}</Title>
-            <Text c="dimmed" mt={6}>
-              Selecciona una sección en la página o en la lista lateral.
-            </Text>
-            <Text size="sm" c="dimmed" mt={4}>
-              {editorData?.project.canEdit
-                ? 'Los cambios se guardan automáticamente después de una breve pausa.'
-                : 'Tienes acceso de solo lectura: puedes revisar el borrador, pero no modificarlo.'}
-            </Text>
+    <main data-editor-command-scope="editor" className={styles.editorPage}>
+      <div className={styles.editorContainer}>
+        <header className={styles.editorHeader}>
+          <div className={styles.editorHeading}>
+            <Title order={1} className={styles.editorTitle}>{editorData?.project.name ?? 'Proyecto'}</Title>
             {editorData && (
-              <Badge mt="sm" color={saveStatus === 'error' ? 'red' : saveStatus === 'saving' ? 'yellow' : 'green'} variant="light">
+              <Badge className={styles.saveBadge} color={saveStatus === 'error' ? 'red' : saveStatus === 'saving' ? 'yellow' : 'green'} variant="light">
                 {saveStatus === 'saving' ? 'Guardando…' : saveStatus === 'error' ? 'Error al guardar' : 'Guardado'}
               </Badge>
             )}
@@ -972,12 +963,12 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             {loadError}
           </Alert>
         ) : editorData ? (
-          <div className={`grid min-w-0 gap-5 ${sectionsPanelVisible ? 'lg:grid-cols-[minmax(0,1fr)_18rem]' : 'lg:grid-cols-1'}`}>
-            <section aria-label="Canvas del sitio" className="order-last min-w-0 lg:order-none">
-              <Card withBorder radius="lg" padding="md" className={styles.canvasSurface}>
-                <Stack gap="md">
+          <div className={`${styles.workspace} ${sectionsPanelVisible ? '' : styles.workspaceCollapsed}`}>
+            <section aria-label="Canvas del sitio" className={styles.canvasPanel}>
+              <Card withBorder radius="lg" padding="sm" className={styles.canvasSurface}>
+                <Stack gap="md" className={styles.canvasStack}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Title order={2}>Vista de página</Title>
+                    <Title order={2} className={styles.panelHeading}>Vista de página</Title>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button.Group aria-label="Tamaño de vista previa">
                         <Button variant={previewMode === 'desktop' ? 'filled' : 'default'} aria-pressed={previewMode === 'desktop'} aria-label="Vista de escritorio" onClick={() => setPreviewMode('desktop')}><Monitor size={16} aria-hidden="true" /> Escritorio</Button>
@@ -1026,17 +1017,17 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               </Card>
             </section>
 
-            {sectionsPanelVisible && <aside aria-label="Lista de secciones" className="order-first min-w-0 lg:order-none">
-              <Card ref={sectionsPanelRef} withBorder radius="lg" padding="sm" className={styles.sectionsPanel}>
-                <Stack gap="md">
+            {sectionsPanelVisible && <aside aria-label="Lista de secciones" className={styles.sectionsColumn}>
+              <Card ref={sectionsPanelRef} withBorder radius="lg" padding="sm" className={`${styles.sectionsPanel} ${styles.sectionsSurface}`}>
+                <Stack gap="sm" className={styles.sectionsStack}>
                   <div>
-                    <Title order={2}>Secciones</Title>
-                    <Text size="sm" c="dimmed" mt={4}>
+                    <Title order={2} className={styles.panelHeading}>Estructura</Title>
+                    <Text className={styles.panelDescription} mt={4}>
                       {editorData.project.canEdit ? 'Edición local' : 'Solo lectura'}
                     </Text>
                     {editorData.project.canEdit && (
-                      <Text size="xs" c="dimmed" mt={4}>
-                        Teclado: enfoca una sección y usa ↑ / ↓ para moverla, Shift + D para duplicarla o Delete para eliminarla. También puedes recorrer los botones con Tab y activarlos con Enter.
+                      <Text className={styles.panelHint} mt="xs">
+                        Usa los controles de cada sección para reordenar, duplicar o eliminar. También puedes moverlas con el teclado.
                       </Text>
                     )}
                   </div>
@@ -1052,12 +1043,12 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                     Agregar sección
                   </Button>
                   <nav aria-label="Secciones del sitio" className={styles.sectionsNav}>
-                    <Stack gap="lg">
+                    <Stack gap="md">
                       {editorData.draftDocument.pages.map((page) => (
                         <section key={page.id} aria-label={`Página ${page.path}`}>
-                          <Text size="xs" fw={700} c="dimmed" mb="xs">{page.path}</Text>
+                          <Text className={styles.pagePath} title={page.path}>{page.path}</Text>
                           {page.blocks.length > 0 ? (
-                            <Stack gap="xs">
+                            <Stack gap={4}>
                               {page.blocks.map((block, blockIndex) => {
                                 const definition = requireBlock(portfolioBlockRegistry, block.type);
                                 const selected = isSelected(selection, page.id, block.id);
@@ -1099,22 +1090,23 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                                     requestDeleteBlock(page.id, block.id);
                                   }}>
                                     {dropPlaceholder(page.id, block.id, 'before')}
-                                    <Button data-drag-preview className={styles.sectionSelect} fullWidth variant={selected ? 'filled' : 'default'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
+                                    <Button data-drag-preview className={styles.sectionSelect} fullWidth size="compact-sm" variant={selected ? 'light' : 'subtle'} color={selected ? 'indigo' : 'gray'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} title={definition.label} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
                                       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
                                       event.preventDefault();
                                       selectBlock({ pageId: page.id, blockId: block.id });
                                       reorderBlock(page.id, block.id, blockIndex + (event.key === 'ArrowUp' ? -1 : 1));
                                     }}>
-                                      {blockIndex + 1}. {definition.label}
+                                      <span className={styles.sectionIndex}>{blockIndex + 1}.</span>
+                                      <span className={styles.sectionLabel}>{definition.label}</span>
                                     </Button>
                                     <div className={styles.sectionActions}>
                                       <div className={styles.moveActions}>
-                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Mover ${definition.label} arriba`} title={`Mover ${definition.label} arriba`} disabled={!editorData.project.canEdit || blockIndex === 0} onClick={() => reorderBlock(page.id, block.id, blockIndex - 1)}><ArrowUp size={18} aria-hidden="true" /></Button>
-                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Mover ${definition.label} abajo`} title={`Mover ${definition.label} abajo`} disabled={!editorData.project.canEdit || blockIndex === page.blocks.length - 1} onClick={() => reorderBlock(page.id, block.id, blockIndex + 1)}><ArrowDown size={18} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${definition.label} arriba`} title={`Mover ${definition.label} arriba`} disabled={!editorData.project.canEdit || blockIndex === 0} onClick={() => reorderBlock(page.id, block.id, blockIndex - 1)}><ArrowUp size={16} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${definition.label} abajo`} title={`Mover ${definition.label} abajo`} disabled={!editorData.project.canEdit || blockIndex === page.blocks.length - 1} onClick={() => reorderBlock(page.id, block.id, blockIndex + 1)}><ArrowDown size={16} aria-hidden="true" /></Button>
                                       </div>
                                       <div className={styles.compositionActions}>
-                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Duplicar ${definition.label}`} title={`Duplicar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => duplicateBlock(page.id, block.id)}><Copy size={18} aria-hidden="true" /></Button>
-                                        <Button className={styles.iconAction} size="sm" color="red" variant="light" aria-label={`Eliminar ${definition.label}`} title={`Eliminar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => requestDeleteBlock(page.id, block.id)}><Trash2 size={18} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Duplicar ${definition.label}`} title={`Duplicar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => duplicateBlock(page.id, block.id)}><Copy size={16} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" color="red" variant="subtle" aria-label={`Eliminar ${definition.label}`} title={`Eliminar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => requestDeleteBlock(page.id, block.id)}><Trash2 size={16} aria-hidden="true" /></Button>
                                       </div>
                                     </div>
                                     {dropPlaceholder(page.id, block.id, 'after')}
@@ -1129,26 +1121,34 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                       ))}
                     </Stack>
                   </nav>
-                  <section aria-label="Propiedades de la sección">
-                    <Text size="sm" fw={700} mb="xs">Propiedades</Text>
-                    {selectedBlock && selectedDefinition && propertyDraft ? (
-                      <Stack gap="sm">
-                        <Text size="xs" c="dimmed">
-                          {selectedDefinition.label}
-                        </Text>
-                        {Object.entries(propertyDraft)
-                          .sort(([a], [b]) => (a === 'setup' ? -1 : b === 'setup' ? 1 : 0))
-                          .map(([key, value]) => (
-                          renderPropertyEditor(key, value, [key])
-                        ))}
-                        {propertyErrors.root && (
-                          <Alert color="red" role="alert">{propertyErrors.root}</Alert>
-                        )}
-                      </Stack>
-                    ) : (
-                      <Text size="sm" c="dimmed">Selecciona una sección para editar sus propiedades.</Text>
+                </Stack>
+              </Card>
+            </aside>}
+            {sectionsPanelVisible && <aside aria-label="Propiedades de la sección" className={styles.inspectorPanel}>
+              <Card withBorder radius="lg" padding="sm" className={styles.inspectorSurface}>
+                <Stack gap="md">
+                  <div>
+                    <Title order={2} className={styles.panelHeading}>Propiedades</Title>
+                    {selectedBlock && selectedDefinition && (
+                      <Text className={styles.panelDescription} mt={4}>
+                        Editando: {selectedDefinition.label}
+                      </Text>
                     )}
-                  </section>
+                  </div>
+                  {selectedBlock && selectedDefinition && propertyDraft ? (
+                    <Stack gap="sm">
+                      {Object.entries(propertyDraft)
+                        .sort(([a], [b]) => (a === 'setup' ? -1 : b === 'setup' ? 1 : 0))
+                        .map(([key, value]) => renderPropertyEditor(key, value, [key]))}
+                      {propertyErrors.root && (
+                        <Alert color="red" role="alert">{propertyErrors.root}</Alert>
+                      )}
+                    </Stack>
+                  ) : (
+                    <Text className={styles.panelDescription}>
+                      Selecciona una sección en la estructura o en la vista para editar su contenido.
+                    </Text>
+                  )}
                 </Stack>
               </Card>
             </aside>}

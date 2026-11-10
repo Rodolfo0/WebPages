@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { LayoutTemplate, MonitorSmartphone, Rocket } from 'lucide-react';
 import type { AuthUser } from '../domain/auth';
 import PasswordResetForm from './password-reset-form';
+import styles from './auth.module.css';
 
 type ViewState = 'loading' | 'signed_out' | 'signed_in' | 'unavailable';
 type Mode = 'login' | 'signup' | 'recover';
@@ -17,7 +19,13 @@ type ApiResult = {
   message?: string;
 };
 
-export default function AuthPlayground() {
+const PROJECTS_PATH = '/app/projects';
+
+function replaceLocation(path: string) {
+  window.location.replace(path);
+}
+
+export default function AuthPlayground({ navigate = replaceLocation }: { navigate?: (path: string) => void } = {}) {
   const [view, setView] = useState<ViewState>('loading');
   const [mode, setMode] = useState<Mode>('login');
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -30,8 +38,33 @@ export default function AuthPlayground() {
   const [canResendConfirmation, setCanResendConfirmation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [wantsPasswordReset, setWantsPasswordReset] = useState(false);
+  // Keeps the recovery form open even when focus revalidates the session.
+  const passwordResetPending = useRef(false);
+  const navigateRef = useRef(navigate);
   const signupPasswordStep = mode === 'signup' && checkedSignupEmail === email;
   const signupEmailStep = mode === 'signup' && !signupPasswordStep;
+  const heading = view === 'signed_in'
+    ? wantsPasswordReset ? 'Recupera el acceso' : 'Abriendo tus proyectos'
+    : mode === 'signup'
+      ? 'Crea tu cuenta'
+      : mode === 'recover'
+        ? 'Recupera el acceso'
+        : 'Vuelve a tus proyectos';
+  const description = view === 'signed_in'
+    ? wantsPasswordReset ? 'Guarda una contraseña nueva para tu cuenta.' : 'Tu sesión está activa. Te llevamos a tus proyectos.'
+    : mode === 'signup'
+      ? 'Crea un espacio para diseñar y publicar tu portafolio.'
+      : mode === 'recover'
+        ? 'Te enviaremos instrucciones para recuperar tu cuenta.'
+        : 'Inicia sesión para continuar con tus proyectos.';
+
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
+  function goToProjects() {
+    navigateRef.current(PROJECTS_PATH);
+  }
 
   async function refreshSession(requireRecoverySession = false) {
     try {
@@ -47,6 +80,7 @@ export default function AuthPlayground() {
       if (response.ok && result.authenticated && result.user) {
         setUser(result.user);
         setView('signed_in');
+        if (!requireRecoverySession && !passwordResetPending.current) navigateRef.current(PROJECTS_PATH);
         return;
       }
 
@@ -80,6 +114,7 @@ export default function AuthPlayground() {
       setError('El enlace venció o ya se usó. Escribe tu correo y solicita uno nuevo.');
       setCanResendConfirmation(true);
     } else if (authResult === 'recovery') {
+      passwordResetPending.current = true;
       setWantsPasswordReset(true);
     } else if (authResult === 'recovery_error' || authResult === 'recovery_link_expired') {
       setMode('recover');
@@ -172,31 +207,6 @@ export default function AuthPlayground() {
       }
 
       await refreshSession();
-      setMessage(mode === 'signup' ? 'Registro completado.' : 'Sesión iniciada.');
-    } catch {
-      setError('No se pudo conectar con el servidor de autenticación.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function signOut() {
-    setBusy(true);
-    setError('');
-    setMessage('');
-
-    try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' });
-      const result = (await response.json()) as ApiResult;
-      if (!response.ok) {
-        setError(result.message ?? 'No se pudo cerrar la sesión.');
-        return;
-      }
-
-      setUser(null);
-      setView('signed_out');
-      setWantsPasswordReset(false);
-      setMessage('Sesión cerrada.');
     } catch {
       setError('No se pudo conectar con el servidor de autenticación.');
     } finally {
@@ -233,25 +243,36 @@ export default function AuthPlayground() {
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-[#f5f7fb] px-4 py-10 text-slate-900 sm:px-8">
-      <div className="w-full max-w-xl">
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">
-            Acceso a tu cuenta
+    <main className={styles.authPage}>
+      <aside className={styles.showcase} aria-label="Site Creator">
+        <BrandMark />
+        <div className={styles.showcaseCopy}>
+          <p className={styles.showcaseTitle}>Diseña tu portafolio sección por sección.</p>
+          <p className={styles.showcaseText}>
+            Combina bloques listos, edita su contenido y revisa cómo se ve en escritorio y móvil antes de publicar.
           </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Inicia sesión o crea tu cuenta
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-            Accede a tu cuenta o recupera el acceso desde tu correo.
-          </p>
+        </div>
+        <EditorPreview />
+        <ul className={styles.featureList}>
+          <li><LayoutTemplate size={16} aria-hidden="true" /> Secciones listas para usar</li>
+          <li><MonitorSmartphone size={16} aria-hidden="true" /> Vista previa adaptable</li>
+          <li><Rocket size={16} aria-hidden="true" /> Publica cuando esté listo</li>
+        </ul>
+      </aside>
+      <div className={styles.formPanel}>
+        <div className={styles.formPanelBrand}><BrandMark /></div>
+        <section className={styles.authCard}>
+          <p className={styles.authEyebrow}>Tu espacio creativo</p>
+          <h1 className={styles.authTitle}>{heading}</h1>
+          <p className={styles.authDescription}>{description}</p>
 
           {view === 'signed_in' && user ? (
             wantsPasswordReset ? (
-              <PasswordResetForm user={user} onCancel={() => setWantsPasswordReset(false)} onComplete={() => {
-                setWantsPasswordReset(false);
-                setMessage('Contraseña actualizada.');
+              <PasswordResetForm user={user} onCancel={goToProjects} onComplete={() => {
+                passwordResetPending.current = false;
+                goToProjects();
               }} onSessionInvalid={() => {
+                passwordResetPending.current = false;
                 setWantsPasswordReset(false);
                 setUser(null);
                 setView('signed_out');
@@ -259,41 +280,27 @@ export default function AuthPlayground() {
                 setError('Tu sesión venció. Solicita un enlace de recuperación nuevo.');
               }} />
             ) : (
-            <div className="mt-9 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-              <div className="flex flex-wrap items-start justify-between gap-5">
-                <div>
-                  <p className="text-sm font-semibold text-emerald-900">
-                    Sesión iniciada
-                  </p>
-                  <p className="mt-2 text-sm text-emerald-800">{user.email}</p>
-                  <p className="mt-1 break-all font-mono text-xs text-emerald-700">
-                    ID: {user.id}
-                  </p>
-                </div>
-                <a
-                  href="/app/projects"
-                  className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                >
-                  Administrar proyectos
-                </a>
-                <button
-                  type="button"
-                  onClick={signOut}
-                  disabled={busy}
-                  className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {busy ? 'Procesando…' : 'Cerrar sesión'}
-                </button>
-              </div>
-              <button type="button" onClick={() => setWantsPasswordReset(true)}
-                className="mt-5 text-sm font-semibold text-indigo-700">
-                Cambiar contraseña
-              </button>
-            </div>
+              <p role="status" className={`${styles.redirecting} ${styles.authBody}`}>
+                <span className={styles.spinner} aria-hidden="true" />
+                Redirigiendo…
+              </p>
             )
           ) : (
-            <div className="mt-9">
-              <div className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+            <div className={styles.authBody}>
+              {mode === 'recover' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setError('');
+                    setMessage('');
+                  }}
+                  disabled={busy}
+                  className={styles.textButton}
+                >
+                  ← Volver a iniciar sesión
+                </button>
+              ) : <div className={styles.modeSwitch}>
                 <button
                   type="button"
                   onClick={() => {
@@ -306,7 +313,7 @@ export default function AuthPlayground() {
                   }}
                   disabled={busy}
                   aria-pressed={mode === 'login'}
-                  className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={styles.modeButton}
                 >
                   Iniciar sesión
                 </button>
@@ -323,20 +330,18 @@ export default function AuthPlayground() {
                   }}
                   disabled={busy}
                   aria-pressed={mode === 'signup'}
-                  className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${mode === 'signup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={styles.modeButton}
                 >
                   Crear cuenta
                 </button>
-              </div>
+              </div>}
 
-              <form onSubmit={submitCredentials} className="space-y-5">
-                {mode === 'signup' && <p aria-live="polite" className="text-sm font-medium text-slate-600">
-                  {signupEmailStep ? 'Paso 1 de 2: ingresa tu correo' : 'Paso 2 de 2: elige tu contraseña'}
+              <form onSubmit={submitCredentials} className={styles.form}>
+                {mode === 'signup' && <p aria-live="polite" className={styles.stepHint}>
+                  {signupEmailStep ? 'Paso 1 de 2 · Correo electrónico' : 'Paso 2 de 2 · Elige una contraseña'}
                 </p>}
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">
-                    Correo electrónico
-                  </span>
+                <label className={styles.field}>
+                  Correo electrónico
                   <input
                     type="email"
                     autoComplete="email"
@@ -349,7 +354,7 @@ export default function AuthPlayground() {
                       setEmail(event.target.value);
                       setCheckedSignupEmail(null);
                     }}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                    className={styles.input}
                     placeholder="tu@correo.com"
                   />
                 </label>
@@ -363,14 +368,12 @@ export default function AuthPlayground() {
                     setError('');
                     setMessage('');
                   }}
-                  className="text-sm font-semibold text-indigo-700 disabled:opacity-60"
+                  className={styles.textButton}
                 >
                   Cambiar correo
                 </button>}
-                {(mode === 'login' || signupPasswordStep) && <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">
-                    Contraseña
-                  </span>
+                {(mode === 'login' || signupPasswordStep) && <label className={styles.field}>
+                  Contraseña
                   <input
                     type="password"
                     autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
@@ -378,15 +381,13 @@ export default function AuthPlayground() {
                     disabled={busy}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                    className={styles.input}
                     placeholder="Tu contraseña"
                   />
                 </label>}
 
-                {signupPasswordStep && <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">
-                    Confirmar contraseña
-                  </span>
+                {signupPasswordStep && <label className={styles.field}>
+                  Confirmar contraseña
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -394,23 +395,23 @@ export default function AuthPlayground() {
                     disabled={busy}
                     value={passwordConfirmation}
                     onChange={(event) => setPasswordConfirmation(event.target.value)}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                    className={styles.input}
                     placeholder="Repite tu contraseña"
                   />
                 </label>}
 
                 {error && (
-                  <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                  <p role="alert" className={styles.notice} data-tone="error">
                     {error}
                   </p>
                 )}
                 {message && (
-                  <p role="status" className="rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                  <p role="status" className={styles.notice} data-tone="info">
                     {message}
                   </p>
                 )}
                 {view === 'unavailable' && !error && (
-                  <p role="status" className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <p role="status" className={styles.notice} data-tone="warning">
                     El servicio de autenticación no está disponible. Inténtalo de nuevo más tarde.
                   </p>
                 )}
@@ -418,7 +419,7 @@ export default function AuthPlayground() {
                 <button
                   type="submit"
                   disabled={busy || view === 'loading'}
-                  className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
+                  className={styles.primaryButton}
                 >
                   {busy
                     ? signupEmailStep ? 'Verificando correo…' : 'Procesando…'
@@ -434,7 +435,7 @@ export default function AuthPlayground() {
               {mode === 'login' && (
                 <button type="button" onClick={() => {
                   setMode('recover'); setCheckedSignupEmail(null); setPassword(''); setPasswordConfirmation(''); setError(''); setMessage('');
-                }} disabled={busy} className="mt-4 text-sm font-semibold text-indigo-700">
+                }} disabled={busy} className={styles.textButton}>
                   ¿Olvidaste tu contraseña?
                 </button>
               )}
@@ -444,7 +445,7 @@ export default function AuthPlayground() {
                   type="button"
                   onClick={resendConfirmation}
                   disabled={busy || !email.trim()}
-                  className="mt-4 w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={styles.secondaryButton}
                 >
                   {busy ? 'Solicitando…' : 'Reenviar confirmación'}
                 </button>
@@ -452,16 +453,46 @@ export default function AuthPlayground() {
             </div>
           )}
 
-          {view === 'signed_in' && (message || error) && <div className="mt-8 text-sm">
-            {message && (
-              <p role="status" className="text-emerald-700">{message}</p>
-            )}
-            {error && (
-              <p role="alert" className="text-rose-700">{error}</p>
-            )}
-          </div>}
         </section>
+        <p className={styles.formFooter}>Tu acceso está protegido con autenticación segura.</p>
       </div>
     </main>
+  );
+}
+
+function BrandMark() {
+  return (
+    <span className={styles.brand}>
+      <svg className={styles.brandLogo} viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M22 19.27A2.73 2.73 0 0 1 19.27 22h-4.54A2.73 2.73 0 0 1 12 19.27V12h7.27A2.73 2.73 0 0 1 22 14.73z" fill="#68C4FF" />
+        <path d="M20 2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#0C79D8" />
+        <path d="M7 15a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z" fill="#0C79D8" />
+        <path d="M12 12H4.73A2.73 2.73 0 0 1 2 9.27V4.73A2.73 2.73 0 0 1 4.73 2h4.54A2.73 2.73 0 0 1 12 4.73z" fill="#2E9EFF" />
+      </svg>
+      Site Creator
+    </span>
+  );
+}
+
+function EditorPreview() {
+  return (
+    <div className={styles.preview} aria-hidden="true">
+      <div className={styles.previewBar}>
+        <span /><span /><span />
+      </div>
+      <div className={styles.previewBody}>
+        <div className={styles.previewSidebar}>
+          <i data-active="true" /><i /><i /><i />
+        </div>
+        <div className={styles.previewCanvas}>
+          <div className={styles.previewHero}>
+            <b /><b /><b />
+          </div>
+          <div className={styles.previewGrid}>
+            <span /><span /><span />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
