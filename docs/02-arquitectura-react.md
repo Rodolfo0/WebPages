@@ -49,7 +49,7 @@ Cada carpeta de `resources/<resource>/` puede organizarse por responsabilidad �
 
 Las pruebas viven junto al recurso que posee el comportamiento. Un recorrido E2E entre varios recursos se coloca en el recurso dueño del flujo principal. `shared/` contiene solo código agnóstico usado por más de un recurso; un recurso no debe importar detalles privados de otro.
 
-`auth`, `projects`, `site-document`, `blocks` y `editor` son los recursos implementados hasta ahora. El recurso `editor` posee la interfaz del canvas, la lista lateral, el catálogo y la selección local; obtiene el borrador validado desde `projects/server`. El guardado del borrador se añade en su issue correspondiente. La publicación seguirá siendo un recurso separado.
+`auth`, `projects`, `site-document`, `blocks` y `editor` son los recursos implementados hasta ahora. El recurso `editor` posee la interfaz del canvas, la lista lateral, el catálogo y la selección local; obtiene el borrador validado desde `projects/server`. El editor guarda el borrador mediante `PATCH /api/projects/:projectId` con control de revisión (ver «Guardado»). La publicación seguirá siendo un recurso separado.
 
 La autenticación expone `resources/auth/server` como API de servidor y `resources/auth` como contrato de identidad. Las superficies privadas reciben `AuthUser` mediante `withAuthUser()`; las dependencias de Supabase permanecen en la implementación del proveedor. El formulario privado de cambio de contraseña consume ese mismo tipo.
 
@@ -80,6 +80,8 @@ El navegador puede mantener cambios temporales para una interacción fluida, per
 - Mostrar estados claros: guardando, guardado y error.
 - Evitar enviar el documento completo para cada cambio si el tamaño crece. El primer MVP puede enviar el documento completo y evolucionar a operaciones parciales después de medir.
 - Rechazar versiones antiguas para evitar que una pestaña abierta sobrescriba cambios más recientes.
+
+Implementación actual: el editor espera 600 ms sin cambios y envía el documento completo junto con `draftRevision`, la revisión del servidor sobre la que se editó. Solo hay una petición de guardado en curso; las ediciones hechas mientras tanto se envían al terminar, con la revisión nueva. El servidor actualiza la fila solo si `projects.draft_revision` coincide e incrementa la revisión en la misma sentencia; si no coincide responde `409 project_draft_conflict`. Ante un conflicto el editor conserva los cambios locales visibles, deja de autoguardar y ofrece cargar la versión más reciente. Mientras hay cambios sin guardar, el navegador avisa antes de abandonar la página.
 
 ## Publicación
 

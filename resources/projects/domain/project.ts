@@ -18,6 +18,7 @@ const updateProjectSchema = z.strictObject({
   name: projectNameSchema.optional(),
   slug: projectSlugSchema.optional(),
   draftDocument: z.unknown().optional(),
+  draftRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
 });
 
 const PROJECT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -98,12 +99,15 @@ export function parseUpdateProjectInput(input: unknown) {
 
   const name = result.data.name;
   const slug = result.data.slug ? normalizeProjectSlug(result.data.slug) : undefined;
-  const draftDocument = result.data.draftDocument;
+  const { draftDocument, draftRevision } = result.data;
 
   if (!name && !slug && draftDocument === undefined) {
     throw new ProjectInputError('No se proporcionaron cambios para guardar.');
   }
+  if ((draftDocument === undefined) !== (draftRevision === undefined)) {
+    throw new ProjectInputError('Envía el borrador junto con la revisión sobre la que se editó.');
+  }
 
-  return { name, slug, draftDocument };
+  return { name, slug, draftDocument, draftRevision };
 }
 

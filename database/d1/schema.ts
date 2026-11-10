@@ -67,6 +67,7 @@ export const projects = sqliteTable(
     slug: text('slug').notNull(),
     status: text('status', { enum: PROJECT_STATUSES }).notNull().default('draft'),
     draftDocumentJson: text('draft_document_json').notNull(),
+    draftRevision: integer('draft_revision').notNull().default(0),
     publishedVersionId: text('published_version_id'),
     createdAt: createdAtColumn(),
     updatedAt: createdAtColumn('updated_at'),

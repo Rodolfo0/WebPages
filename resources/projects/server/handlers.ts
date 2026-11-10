@@ -12,6 +12,7 @@ import {
   deleteProject,
   getProjectDraft,
   listProjects,
+  ProjectDraftConflictError,
   ProjectManagementError,
   updateProject,
 } from './manage-projects';
@@ -46,7 +47,11 @@ function projectErrorResponse(error: unknown) {
   if (error instanceof ProjectSlugConflictError) {
     return projectJson({ error: error.code, message: error.message }, error.status);
   }
-  if (error instanceof ProjectCreationError || error instanceof ProjectManagementError) {
+  if (
+    error instanceof ProjectCreationError
+    || error instanceof ProjectManagementError
+    || error instanceof ProjectDraftConflictError
+  ) {
     return projectJson({ error: error.code, message: error.message }, error.status);
   }
   if (error instanceof ProjectAccessError) {
