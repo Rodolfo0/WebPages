@@ -66,6 +66,8 @@ type EditorData = {
   draftDocument: SiteDocument;
 };
 
+type EditorAsset = { id: string; filename: string; createdAt: string };
+
 type BlockSelection = {
   pageId: string;
   blockId: string;
@@ -232,6 +234,9 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [reloadingDraft, setReloadingDraft] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [projectAssets, setProjectAssets] = useState<EditorAsset[]>([]);
+  const [assetPendingDelete, setAssetPendingDelete] = useState<EditorAsset | null>(null);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [draggedBlock, setDraggedBlock] = useState<BlockSelection | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   // The last draft the server confirmed, and the server revision it was stored under. Each save
@@ -434,16 +439,51 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         body: form,
       });
       const result = await response.json().catch(() => ({})) as {
-        asset?: { id: string };
+        asset?: EditorAsset;
         message?: string;
       };
       if (!response.ok) throw new Error(result.message ?? 'No se pudo subir la imagen.');
       if (!result.asset?.id) throw new Error('La subida no devolvió un identificador de imagen.');
+      setProjectAssets((current) => [result.asset!, ...current.filter((asset) => asset.id !== result.asset!.id)]);
       updateNestedProperty(targetPath, result.asset.id);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'No se pudo subir la imagen.');
     } finally {
       setUploadingImage(false);
+    }
+  }
+
+  async function deleteImage(asset: EditorAsset) {
+    if (!editorData?.project.canEdit) return false;
+    setDeletingAssetId(asset.id);
+    setUploadError('');
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(asset.id)}`, {
+        method: 'DELETE',
+        cache: 'no-store',
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; message?: string; draftDocument?: SiteDocument; draftRevision?: number };
+      if (!response.ok) {
+        const message = result.error === 'asset_in_use' || response.status === 409
+          ? result.message ?? 'La imagen sigue en uso. Quita sus referencias de los bloques y publica una versión actualizada antes de eliminarla.'
+          : result.message ?? 'No se pudo eliminar la imagen.';
+        throw new Error(message);
+      }
+      setProjectAssets((current) => current.filter((candidate) => candidate.id !== asset.id));
+      if (result.draftDocument) {
+        setEditorData((current) => current ? { ...current, draftDocument: result.draftDocument! } : current);
+        latestDraft.current = result.draftDocument;
+        lastSavedDraft.current = JSON.stringify(result.draftDocument);
+        if (typeof result.draftRevision === 'number') serverDraftRevision.current = result.draftRevision;
+        setHistory({ past: [], future: [] });
+        syncSelectedProperties(result.draftDocument);
+      }
+      return true;
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'No se pudo eliminar la imagen.');
+      return false;
+    } finally {
+      setDeletingAssetId(null);
     }
   }
 
@@ -587,6 +627,69 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               value={value}
               error={error}
             />
+            {projectAssets.length > 0 && (
+              <Select
+                label="Reutilizar imagen del proyecto"
+                placeholder="Selecciona una imagen existente"
+                clearable
+                data={projectAssets.map((asset) => ({ value: asset.id, label: asset.filename }))}
+                value={value || null}
+                disabled={!canEditImage || uploadingImage}
+                onChange={(assetId) => updateNestedProperty(path, assetId ?? '')}
+                renderOption={({ option }) => {
+                  const asset = projectAssets.find((candidate) => candidate.id === option.value)
+                    ?? { id: String(option.value), filename: String(option.label), createdAt: '' };
+                  const filename = String(option.label);
+                  return (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '48px minmax(0, 1fr) 30px',
+                      gap: 8,
+                      width: '100%',
+                      minWidth: 0,
+                      alignItems: 'center',
+                      paddingRight: 2,
+                      boxSizing: 'border-box',
+                      overflow: 'hidden',
+                    }}>
+                        {/* This image is served through the app's private asset route, so keep its URL unoptimized. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/assets/${encodeURIComponent(asset.id)}`}
+                        alt={filename}
+                        width={48}
+                        height={36}
+                        loading="lazy"
+                        style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
+                      />
+                      <span
+                        title={filename}
+                        style={{ flex: '1 1 0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        {filename.length > 18 ? `${filename.slice(0, 18)}…` : filename}
+                      </span>
+                      <Button
+                        type="button"
+                        size="compact-sm"
+                        variant="subtle"
+                        color="red"
+                        style={{ width: 30, height: 30, minWidth: 30, padding: 0, justifySelf: 'end', margin: 0 }}
+                        aria-label={`Eliminar ${filename}`}
+                        title={`Eliminar ${filename}`}
+                        disabled={!canEditImage || deletingAssetId !== null || uploadingImage}
+                        onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                        onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setAssetPendingDelete(asset);
+                        }}
+                      ><Trash2 size={15} aria-hidden="true" /></Button>
+                    </div>
+                  );
+                }}
+              />
+            )}
             <input
               ref={imageFileInputRef}
               type="file"
@@ -606,7 +709,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                 leftSection={uploadingImage ? <Loader size="xs" /> : undefined}
                 onClick={() => imageFileInputRef.current?.click()}
               >
-                {uploadingImage ? 'Subiendo…' : value ? 'Cambiar imagen' : 'Subir imagen'}
+                {uploadingImage ? 'Subiendo…' : 'Subir imagen'}
               </Button>
               <Button
                 type="button"
@@ -1015,6 +1118,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   useEffect(() => {
     const controller = new AbortController();
 
+    fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as { assets?: EditorAsset[] };
+        if (response.ok && !controller.signal.aborted) setProjectAssets(result.assets ?? []);
+      })
+      .catch(() => {});
+
     fetchInitialDraft.current(controller.signal)
       .then((result) => applyInitialDraft.current(result, false))
       .catch((error: unknown) => {
@@ -1350,6 +1460,18 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               if (blockPendingDelete) deleteBlock(blockPendingDelete.pageId, blockPendingDelete.blockId);
               setBlockPendingDelete(null);
             }}>Eliminar sección</Button>
+          </div>
+        </Stack>
+      </Modal>
+      <Modal opened={assetPendingDelete !== null} onClose={() => deletingAssetId === null && setAssetPendingDelete(null)} title="¿Eliminar imagen?" centered size="sm">
+        <Stack gap="md">
+          <Text>¿Eliminar “{assetPendingDelete?.filename}” del proyecto? Se quitará de todos los bloques del borrador. Esta acción no se puede deshacer.</Text>
+          {uploadError && <Alert color="red" role="alert">{uploadError}</Alert>}
+          <div className="flex justify-end gap-2">
+            <Button variant="default" disabled={deletingAssetId !== null} onClick={() => setAssetPendingDelete(null)}>Cancelar</Button>
+            <Button color="red" loading={deletingAssetId !== null} disabled={!assetPendingDelete || !editorData?.project.canEdit} onClick={async () => {
+              if (assetPendingDelete && await deleteImage(assetPendingDelete)) setAssetPendingDelete(null);
+            }}>Eliminar imagen</Button>
           </div>
         </Stack>
       </Modal>

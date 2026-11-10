@@ -33,6 +33,16 @@ export class AssetUploadError extends Error {
   }
 }
 
+export class AssetInUseError extends Error {
+  readonly code = 'asset_in_use';
+  readonly status = 409;
+
+  constructor(message = 'La imagen está en uso y no se puede eliminar todavía.') {
+    super(message);
+    this.name = 'AssetInUseError';
+  }
+}
+
 export function validateAssetUpload(file: File) {
   if (!ALLOWED_ASSET_TYPES.includes(file.type as typeof ALLOWED_ASSET_TYPES[number])) {
     throw new AssetInputError('Solo se permiten imágenes JPEG, PNG o WebP.');

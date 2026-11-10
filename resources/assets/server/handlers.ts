@@ -1,7 +1,7 @@
 import type { AuthUser } from '../../auth';
 import { withAuthUser } from '../../auth/server';
-import { AssetInputError, AssetUploadError } from '../domain/asset';
-import { listProjectAssets, uploadProjectAsset } from './manage-assets';
+import { AssetInUseError, AssetInputError, AssetUploadError } from '../domain/asset';
+import { deleteProjectAsset, listProjectAssets, uploadProjectAsset } from './manage-assets';
 import { ProjectAccessError } from '../../projects/domain/access';
 import { eq } from 'drizzle-orm';
 import { assets } from '../../../database/d1/schema';
@@ -21,13 +21,43 @@ function json(body: unknown, status = 200) {
 }
 
 function assetErrorResponse(error: unknown) {
-  if (error instanceof AssetInputError || error instanceof AssetUploadError) {
+  if (error && typeof error === 'object' && 'code' in error && error.code === 'asset_in_use') {
+    const message = 'message' in error && typeof error.message === 'string'
+      ? error.message
+      : 'Esta imagen todavía está en uso. Quita la imagen de la publicación activa antes de eliminarla.';
+    return json({ error: 'asset_in_use', message }, 409);
+  }
+  if (error instanceof AssetInUseError || error instanceof AssetInputError || error instanceof AssetUploadError) {
     return json({ error: error.code, message: error.message }, error.status);
   }
   if (error instanceof ProjectAccessError) {
     return json({ error: error.code, message: error.message }, error.status);
   }
   return json({ error: 'asset_unavailable', message: 'No se pudo completar la operación de imágenes.' }, 503);
+}
+
+export function handleDeleteAsset(request: Request, bindings: AssetBindings, projectId: string, assetId: string) {
+  if (!bindings.DB) return json({ error: 'asset_unavailable', message: 'No se pudo acceder al almacenamiento de proyectos.' }, 503);
+  return withAuthUser(request, bindings, async (user: AuthUser) => {
+    try {
+      const result = await deleteProjectAsset(bindings.DB!, bindings.FILES, user, projectId, assetId);
+      if (result && 'error' in result && result.error === 'asset_in_use') {
+        return json(result, 409);
+      }
+      return result ? json(result) : json({ error: 'asset_not_found', message: 'La imagen no existe.' }, 404);
+    } catch (error) {
+      if (
+        error instanceof AssetInputError
+        || error instanceof AssetUploadError
+        || error instanceof ProjectAccessError
+        || (error !== null && typeof error === 'object' && 'code' in error && error.code === 'asset_in_use')
+      ) return assetErrorResponse(error);
+      return json({
+        error: 'asset_delete_failed',
+        message: 'No se pudo eliminar la imagen y no se actualizó el borrador. Inténtalo de nuevo.',
+      }, 503);
+    }
+  });
 }
 
 export function handleListAssets(request: Request, bindings: AssetBindings, projectId: string) {

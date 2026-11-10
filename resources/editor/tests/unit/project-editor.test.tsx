@@ -50,8 +50,11 @@ describe('ProjectEditor properties panel', () => {
       disconnect() {}
     });
     fetchMock.mockReset();
-    fetchMock.mockImplementation(async (_input, init) => {
+    fetchMock.mockImplementation(async (input, init) => {
       if (init?.method === 'PATCH') return jsonResponse({ message: 'No se pudo guardar.' }, 503);
+      if (String(input).endsWith('/assets')) {
+        return jsonResponse({ assets: [{ id: 'asset-preview', filename: 'preview-image.png', createdAt: '2026-11-10T00:00:00.000Z' }] });
+      }
       return jsonResponse({
         project: {
           id: 'project-1',
@@ -71,6 +74,17 @@ describe('ProjectEditor properties panel', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('shows an image preview in the reuse image dropdown', async () => {
+    renderEditor();
+
+    const reuseInput = (await screen.findAllByLabelText('Reutilizar imagen del proyecto'))[0];
+    fireEvent.click(reuseInput);
+
+    await waitFor(() => {
+      expect(document.body.querySelector('img[src="/api/assets/asset-preview"]')).toHaveAttribute('width', '48');
+    });
   });
 
   it('edits text and keeps the temporary value visible after save failure', async () => {
