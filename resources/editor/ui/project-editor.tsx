@@ -1019,14 +1019,14 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
             {sectionsPanelVisible && <aside aria-label="Lista de secciones" className={styles.sectionsColumn}>
               <Card ref={sectionsPanelRef} withBorder radius="lg" padding="sm" className={`${styles.sectionsPanel} ${styles.sectionsSurface}`}>
-                <Stack gap="md">
+                <Stack gap="sm" className={styles.sectionsStack}>
                   <div>
                     <Title order={2} className={styles.panelHeading}>Estructura</Title>
                     <Text className={styles.panelDescription} mt={4}>
                       {editorData.project.canEdit ? 'Edición local' : 'Solo lectura'}
                     </Text>
                     {editorData.project.canEdit && (
-                      <Text className={styles.panelHint} mt="sm">
+                      <Text className={styles.panelHint} mt="xs">
                         Usa los controles de cada sección para reordenar, duplicar o eliminar. También puedes moverlas con el teclado.
                       </Text>
                     )}
@@ -1043,12 +1043,12 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                     Agregar sección
                   </Button>
                   <nav aria-label="Secciones del sitio" className={styles.sectionsNav}>
-                    <Stack gap="lg">
+                    <Stack gap="md">
                       {editorData.draftDocument.pages.map((page) => (
                         <section key={page.id} aria-label={`Página ${page.path}`}>
-                          <Text size="xs" fw={700} c="dimmed" mb="xs">{page.path}</Text>
+                          <Text className={styles.pagePath} title={page.path}>{page.path}</Text>
                           {page.blocks.length > 0 ? (
-                            <Stack gap="xs">
+                            <Stack gap={4}>
                               {page.blocks.map((block, blockIndex) => {
                                 const definition = requireBlock(portfolioBlockRegistry, block.type);
                                 const selected = isSelected(selection, page.id, block.id);
@@ -1090,22 +1090,23 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                                     requestDeleteBlock(page.id, block.id);
                                   }}>
                                     {dropPlaceholder(page.id, block.id, 'before')}
-                                    <Button data-drag-preview className={styles.sectionSelect} fullWidth variant={selected ? 'filled' : 'default'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
+                                    <Button data-drag-preview className={styles.sectionSelect} fullWidth size="compact-sm" variant={selected ? 'light' : 'subtle'} color={selected ? 'indigo' : 'gray'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} title={definition.label} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
                                       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
                                       event.preventDefault();
                                       selectBlock({ pageId: page.id, blockId: block.id });
                                       reorderBlock(page.id, block.id, blockIndex + (event.key === 'ArrowUp' ? -1 : 1));
                                     }}>
-                                      {blockIndex + 1}. {definition.label}
+                                      <span className={styles.sectionIndex}>{blockIndex + 1}.</span>
+                                      <span className={styles.sectionLabel}>{definition.label}</span>
                                     </Button>
                                     <div className={styles.sectionActions}>
                                       <div className={styles.moveActions}>
-                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Mover ${definition.label} arriba`} title={`Mover ${definition.label} arriba`} disabled={!editorData.project.canEdit || blockIndex === 0} onClick={() => reorderBlock(page.id, block.id, blockIndex - 1)}><ArrowUp size={18} aria-hidden="true" /></Button>
-                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Mover ${definition.label} abajo`} title={`Mover ${definition.label} abajo`} disabled={!editorData.project.canEdit || blockIndex === page.blocks.length - 1} onClick={() => reorderBlock(page.id, block.id, blockIndex + 1)}><ArrowDown size={18} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${definition.label} arriba`} title={`Mover ${definition.label} arriba`} disabled={!editorData.project.canEdit || blockIndex === 0} onClick={() => reorderBlock(page.id, block.id, blockIndex - 1)}><ArrowUp size={16} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${definition.label} abajo`} title={`Mover ${definition.label} abajo`} disabled={!editorData.project.canEdit || blockIndex === page.blocks.length - 1} onClick={() => reorderBlock(page.id, block.id, blockIndex + 1)}><ArrowDown size={16} aria-hidden="true" /></Button>
                                       </div>
                                       <div className={styles.compositionActions}>
-                                        <Button className={styles.iconAction} size="sm" variant="default" aria-label={`Duplicar ${definition.label}`} title={`Duplicar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => duplicateBlock(page.id, block.id)}><Copy size={18} aria-hidden="true" /></Button>
-                                        <Button className={styles.iconAction} size="sm" color="red" variant="light" aria-label={`Eliminar ${definition.label}`} title={`Eliminar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => requestDeleteBlock(page.id, block.id)}><Trash2 size={18} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Duplicar ${definition.label}`} title={`Duplicar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => duplicateBlock(page.id, block.id)}><Copy size={16} aria-hidden="true" /></Button>
+                                        <Button className={styles.iconAction} size="compact-sm" color="red" variant="subtle" aria-label={`Eliminar ${definition.label}`} title={`Eliminar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => requestDeleteBlock(page.id, block.id)}><Trash2 size={16} aria-hidden="true" /></Button>
                                       </div>
                                     </div>
                                     {dropPlaceholder(page.id, block.id, 'after')}

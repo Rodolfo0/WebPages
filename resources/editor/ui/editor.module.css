@@ -229,21 +229,63 @@
   cursor: grabbing;
 }
 
+.sectionsSurface {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sectionsStack {
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+.sectionsStack > *:not(.sectionsNav) {
+  flex: 0 0 auto;
+}
+
 .sectionsNav {
   min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+  margin-inline: -0.35rem;
+  padding: 0.1rem 0.35rem 0.35rem;
+  overflow-y: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.pagePath {
+  margin-bottom: 0.4rem;
+  overflow: hidden;
+  color: #8a91a5;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sectionRow {
   display: grid;
-  gap: 0.2rem;
+  min-width: 0;
+  gap: 0.1rem;
   padding: 0.2rem;
-  border: 1px solid transparent;
-  border-radius: 0.7rem;
-  transition: background 140ms ease, border-color 140ms ease;
+  border: 1px solid #e9ecf3;
+  border-radius: 0.55rem;
+  background: var(--surface);
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.sectionRow:hover {
+  border-color: #dce0ea;
+  box-shadow: 0 1px 4px rgb(31 42 78 / 5%);
 }
 
 .sectionRow[data-selected='true'] {
-  border-color: #d9ddfb;
+  border-color: #cfd4fa;
   background: #f6f6ff;
 }
 
@@ -257,22 +299,53 @@
 
 .sectionRow > .dropPlaceholder {
   grid-column: 1 / -1;
-  min-height: 2.25rem;
+  min-height: 2rem;
   border-radius: var(--mantine-radius-sm);
 }
 
 .sectionRow > .dropPlaceholder::before {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
 }
 
 .sectionSelect {
   min-width: 0;
-  padding-inline: 0.55rem;
+  height: 1.6rem;
+  padding-block: 0;
+  padding-inline: 0.4rem;
+  border-radius: 0.4rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.sectionSelect :global(.mantine-Button-inner) {
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 .sectionSelect :global(.mantine-Button-label) {
-  justify-content: flex-start;
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
   gap: 0.35rem;
+  overflow: hidden;
+}
+
+.sectionIndex {
+  flex: 0 0 auto;
+  color: #9aa1b4;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.sectionRow[data-selected='true'] .sectionIndex {
+  color: var(--mantine-color-indigo-5);
+}
+
+.sectionLabel {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -280,29 +353,33 @@
 
 .sectionActions {
   display: flex;
-  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 0.2rem;
+  padding: 0.1rem 0.15rem 0;
+  border-top: 1px solid #f0f2f7;
 }
 
 .moveActions,
 .compositionActions {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.1rem;
 }
 
 .iconAction {
-  min-width: 2rem;
-  min-height: 2rem;
-  height: 2rem;
-  padding-inline: 0.3rem;
+  width: 1.4rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  min-height: 1.4rem;
+  padding: 0;
+  border-radius: 0.35rem;
 }
 
 .iconAction svg {
-  width: 1rem;
-  height: 1rem;
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 .renderedBlock {
@@ -366,10 +443,13 @@
     flex: initial;
   }
 
+  .sectionsStack,
+  .sectionsNav {
+    flex: initial;
+  }
+
   .sectionsNav {
     max-height: 24rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
 
   .canvasViewport {
