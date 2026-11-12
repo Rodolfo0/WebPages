@@ -1558,7 +1558,10 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             {projectAssets.map((asset) => (
               <Card key={asset.id} withBorder padding="sm" radius="md">
                 <Stack gap="xs">
-                  <Text size="sm" fw={500} lineClamp={2} title={asset.filename}>{asset.filename}</Text>
+                  <Text size="sm" fw={500} lineClamp={2} title={asset.filename}
+                    style={{ height: 42, overflow: 'hidden' }}>
+                    {asset.filename}
+                  </Text>
                   <Button type="button" variant="subtle" color="gray" fullWidth
                     aria-label={`Seleccionar ${asset.filename}`} disabled={!editorData?.project.canEdit}
                     onClick={() => {
