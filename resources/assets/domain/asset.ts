@@ -57,6 +57,15 @@ export function validateAssetUpload(file: File) {
   if (!result.success) throw new AssetInputError('El nombre del archivo no es válido.');
 }
 
+export function validateAssetFilename(value: unknown) {
+  if (typeof value !== 'string') throw new AssetInputError('Escribe un nombre para la imagen.');
+  const filename = value.normalize('NFKC').trim();
+  if (!filename) throw new AssetInputError('El nombre de la imagen no puede estar vacío.');
+  if (filename.length > 255) throw new AssetInputError('El nombre de la imagen no puede superar 255 caracteres.');
+  if (/[\u0000-\u001f\u007f]/.test(filename)) throw new AssetInputError('El nombre de la imagen contiene caracteres no válidos.');
+  return filename;
+}
+
 export function assetExtension(contentType: string) {
   return contentType === 'image/jpeg' ? 'jpg'
     : contentType === 'image/png' ? 'png'

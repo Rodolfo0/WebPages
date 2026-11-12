@@ -7,7 +7,7 @@ import { requireProjectPermission } from '../../projects/server/access';
 import { portfolioBlockRegistry, toBlockSchemaRegistry } from '../../blocks';
 import { collectSiteDocumentAssetIds } from '../../site-document';
 import type { SiteDocument } from '../../site-document';
-import { assetObjectKey, AssetUploadError, type AssetRecord, validateAssetUpload } from '../domain/asset';
+import { assetObjectKey, AssetUploadError, type AssetRecord, validateAssetFilename, validateAssetUpload } from '../domain/asset';
 
 export async function listProjectAssets(database: D1Database, files: R2Bucket | undefined, authUser: AuthUser, projectId: string) {
   await requireProjectPermission(database, authUser, projectId, 'assets:read');
@@ -74,6 +74,34 @@ export async function getProjectAsset(database: D1Database, authUser: AuthUser, 
   const db = createDb(database);
   const [asset] = await db.select().from(assets).where(and(eq(assets.projectId, projectId), eq(assets.id, assetId))).limit(1);
   return asset ?? null;
+}
+
+export async function renameProjectAsset(
+  database: D1Database,
+  authUser: AuthUser,
+  projectId: string,
+  assetId: string,
+  filename: unknown,
+) {
+  await requireProjectPermission(database, authUser, projectId, 'assets:manage');
+  const nextFilename = validateAssetFilename(filename);
+  const db = createDb(database);
+  const [asset] = await db.select().from(assets)
+    .where(and(eq(assets.projectId, projectId), eq(assets.id, assetId))).limit(1);
+  if (!asset) return null;
+
+  await db.update(assets).set({ filename: nextFilename })
+    .where(and(eq(assets.projectId, projectId), eq(assets.id, assetId)));
+
+  return {
+    id: asset.id,
+    projectId: asset.projectId,
+    filename: nextFilename,
+    contentType: asset.contentType,
+    byteSize: asset.byteSize,
+    altText: asset.altText,
+    createdAt: new Date(asset.createdAt).toISOString(),
+  } satisfies AssetRecord;
 }
 
 export async function deleteProjectAsset(database: D1Database, files: R2Bucket | undefined, authUser: AuthUser, projectId: string, assetId: string) {

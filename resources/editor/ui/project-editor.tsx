@@ -19,7 +19,7 @@ import { useHotkeys } from '@mantine/hooks';
 import type { HotkeyItem } from '@mantine/hooks';
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, Copy, ImageMinus, Monitor, Redo2, Smartphone, Trash2, Undo2, Upload } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, ImageMinus, Monitor, Pencil, Redo2, Smartphone, Trash2, Undo2, Upload } from 'lucide-react';
 import { create, type Delta } from 'jsondiffpatch';
 import { portfolioBlockRegistry, requireBlock } from '../../blocks';
 import type { BlockProps, JsonValue, SiteDocument } from '../../site-document';
@@ -238,6 +238,10 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [projectAssets, setProjectAssets] = useState<EditorAsset[]>([]);
   const [imagePickerTargetPath, setImagePickerTargetPath] = useState<(string | number)[] | null>(null);
   const [assetPendingDelete, setAssetPendingDelete] = useState<EditorAsset | null>(null);
+  const [assetPendingRename, setAssetPendingRename] = useState<EditorAsset | null>(null);
+  const [renameFilename, setRenameFilename] = useState('');
+  const [renameError, setRenameError] = useState('');
+  const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [draggedBlock, setDraggedBlock] = useState<BlockSelection | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
@@ -504,6 +508,31 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       return uploadedAssets.length === files.length && failures.length === 0;
     } finally {
       setUploadingImage(false);
+    }
+  }
+
+  async function renameImage(asset: EditorAsset) {
+    if (!editorData?.project.canEdit) return false;
+    setRenamingAssetId(asset.id);
+    setRenameError('');
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(asset.id)}`, {
+        method: 'PATCH',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: renameFilename }),
+      });
+      const result = await response.json().catch(() => ({})) as { asset?: EditorAsset; message?: string };
+      if (!response.ok) throw new Error(result.message ?? 'No se pudo renombrar la imagen.');
+      if (!result.asset) throw new Error('La respuesta no incluyó la imagen renombrada.');
+      setProjectAssets((current) => current.map((candidate) => candidate.id === asset.id ? result.asset! : candidate));
+      setAssetPendingRename(null);
+      return true;
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : 'No se pudo renombrar la imagen.');
+      return false;
+    } finally {
+      setRenamingAssetId(null);
     }
   }
 
@@ -1542,12 +1571,24 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                     <img src={`/api/assets/${encodeURIComponent(asset.id)}`} alt="" loading="lazy"
                       style={{ display: 'block', width: '100%', height: 128, objectFit: 'cover', borderRadius: 6 }} />
                   </Button>
-                  <Button type="button" variant="subtle" color="red" size="xs"
-                    aria-label={`Eliminar ${asset.filename}`} title={`Eliminar ${asset.filename}`}
-                    disabled={!editorData?.project.canEdit || deletingAssetId !== null || uploadingImage}
-                    onClick={() => setAssetPendingDelete(asset)}>
-                    <Trash2 size={15} aria-hidden="true" />
-                  </Button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                    <Button type="button" variant="subtle" size="xs"
+                      aria-label={`Renombrar ${asset.filename}`} title={`Renombrar ${asset.filename}`}
+                      disabled={!editorData?.project.canEdit || renamingAssetId !== null || deletingAssetId !== null || uploadingImage}
+                      onClick={() => {
+                        setRenameFilename(asset.filename);
+                        setRenameError('');
+                        setAssetPendingRename(asset);
+                      }}>
+                      <Pencil size={15} aria-hidden="true" />
+                    </Button>
+                    <Button type="button" variant="subtle" color="red" size="xs"
+                      aria-label={`Eliminar ${asset.filename}`} title={`Eliminar ${asset.filename}`}
+                      disabled={!editorData?.project.canEdit || deletingAssetId !== null || renamingAssetId !== null || uploadingImage}
+                      onClick={() => setAssetPendingDelete(asset)}>
+                      <Trash2 size={15} aria-hidden="true" />
+                    </Button>
+                  </div>
                 </Stack>
               </Card>
             ))}
@@ -1574,6 +1615,42 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             }}>Eliminar sección</Button>
           </div>
         </Stack>
+      </Modal>
+      <Modal
+        opened={assetPendingRename !== null}
+        onClose={() => renamingAssetId === null && setAssetPendingRename(null)}
+        title="Renombrar imagen"
+        centered
+        size="sm"
+      >
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          if (assetPendingRename) void renameImage(assetPendingRename);
+        }}>
+          <Stack gap="md">
+            <TextInput
+              label="Nombre de la imagen"
+              value={renameFilename}
+              maxLength={255}
+              autoFocus
+              disabled={renamingAssetId !== null}
+              error={renameError}
+              onChange={(event) => setRenameFilename(event.currentTarget.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="default" disabled={renamingAssetId !== null} onClick={() => setAssetPendingRename(null)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                loading={renamingAssetId !== null}
+                disabled={!assetPendingRename || !editorData?.project.canEdit || !renameFilename.trim() || renameFilename === assetPendingRename.filename}
+              >
+                Guardar nombre
+              </Button>
+            </div>
+          </Stack>
+        </form>
       </Modal>
       <Modal opened={assetPendingDelete !== null} onClose={() => deletingAssetId === null && setAssetPendingDelete(null)} title="¿Eliminar imagen?" centered size="sm">
         <Stack gap="md">
