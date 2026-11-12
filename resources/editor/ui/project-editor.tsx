@@ -19,7 +19,7 @@ import { useHotkeys } from '@mantine/hooks';
 import type { HotkeyItem } from '@mantine/hooks';
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, Copy, Monitor, Redo2, Smartphone, Trash2, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, ImageMinus, Monitor, Redo2, Smartphone, Trash2, Undo2, Upload } from 'lucide-react';
 import { create, type Delta } from 'jsondiffpatch';
 import { portfolioBlockRegistry, requireBlock } from '../../blocks';
 import type { BlockProps, JsonValue, SiteDocument } from '../../site-document';
@@ -235,6 +235,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [projectAssets, setProjectAssets] = useState<EditorAsset[]>([]);
+  const [imagePickerTargetPath, setImagePickerTargetPath] = useState<(string | number)[] | null>(null);
   const [assetPendingDelete, setAssetPendingDelete] = useState<EditorAsset | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [draggedBlock, setDraggedBlock] = useState<BlockSelection | null>(null);
@@ -252,6 +253,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const skipSelectionScroll = useRef(false);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const imagePickerFileInputRef = useRef<HTMLInputElement | null>(null);
   const sectionsPanelRef = useRef<HTMLDivElement | null>(null);
 
   function commitDocument(nextDocument: SiteDocument) {
@@ -427,7 +429,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   }
 
   async function uploadImage(file: File | null, targetPath: (string | number)[] = ['imageAssetId']) {
-    if (!file || !editorData) return;
+    if (!file || !editorData) return false;
     setUploadingImage(true);
     setUploadError('');
     try {
@@ -446,8 +448,10 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       if (!result.asset?.id) throw new Error('La subida no devolvió un identificador de imagen.');
       setProjectAssets((current) => [result.asset!, ...current.filter((asset) => asset.id !== result.asset!.id)]);
       updateNestedProperty(targetPath, result.asset.id);
+      return true;
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'No se pudo subir la imagen.');
+      return false;
     } finally {
       setUploadingImage(false);
     }
@@ -616,79 +620,32 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       }
       if (key === 'imageAssetId') {
         const canEditImage = editorData?.project.canEdit ?? false;
+        const selectedAsset = projectAssets.find((asset) => asset.id === value);
         return (
           <Stack key={path.join('.')} gap="xs">
-            <TextInput
-              label={label}
-              description="Identificador generado automáticamente"
-              placeholder="Sin imagen seleccionada"
-              maxLength={maxLength}
-              readOnly
-              value={value}
-              error={error}
-            />
             {projectAssets.length > 0 && (
-              <Select
-                label="Reutilizar imagen del proyecto"
-                placeholder="Selecciona una imagen existente"
-                clearable
-                data={projectAssets.map((asset) => ({ value: asset.id, label: asset.filename }))}
-                value={value || null}
-                disabled={!canEditImage || uploadingImage}
-                onChange={(assetId) => updateNestedProperty(path, assetId ?? '')}
-                renderOption={({ option }) => {
-                  const asset = projectAssets.find((candidate) => candidate.id === option.value)
-                    ?? { id: String(option.value), filename: String(option.label), createdAt: '' };
-                  const filename = String(option.label);
-                  return (
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '48px minmax(0, 1fr) 30px',
-                      gap: 8,
-                      width: '100%',
-                      minWidth: 0,
-                      alignItems: 'center',
-                      paddingRight: 2,
-                      boxSizing: 'border-box',
-                      overflow: 'hidden',
-                    }}>
-                        {/* This image is served through the app's private asset route, so keep its URL unoptimized. */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/assets/${encodeURIComponent(asset.id)}`}
-                        alt={filename}
-                        width={48}
-                        height={36}
-                        loading="lazy"
-                        style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
-                      />
-                      <span
-                        title={filename}
-                        style={{ flex: '1 1 0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        {filename.length > 18 ? `${filename.slice(0, 18)}…` : filename}
-                      </span>
-                      <Button
-                        type="button"
-                        size="compact-sm"
-                        variant="subtle"
-                        color="red"
-                        style={{ width: 30, height: 30, minWidth: 30, padding: 0, justifySelf: 'end', margin: 0 }}
-                        aria-label={`Eliminar ${filename}`}
-                        title={`Eliminar ${filename}`}
-                        disabled={!canEditImage || deletingAssetId !== null || uploadingImage}
-                        onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                        onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setAssetPendingDelete(asset);
-                        }}
-                      ><Trash2 size={15} aria-hidden="true" /></Button>
+              <Stack gap={6}>
+                <Text size="sm" fw={500}>Imagen</Text>
+                {selectedAsset ? (
+                  <Card withBorder padding="xs" radius="md">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      {/* This image is served through the app's private asset route, so keep its URL unoptimized. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/api/assets/${encodeURIComponent(selectedAsset.id)}`} alt="" width={56} height={42}
+                        style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                      <Text size="sm" title={selectedAsset.filename} lineClamp={1} style={{ minWidth: 0, flex: 1 }}>
+                        {selectedAsset.filename}
+                      </Text>
                     </div>
-                  );
-                }}
-              />
+                  </Card>
+                ) : (
+                  <Text size="sm" c="dimmed">Sin imagen seleccionada</Text>
+                )}
+                <Button type="button" variant="default" disabled={!canEditImage || uploadingImage}
+                  onClick={() => setImagePickerTargetPath(path)}>
+                  {selectedAsset ? 'Cambiar imagen' : 'Elegir imagen'}
+                </Button>
+              </Stack>
             )}
             <input
               ref={imageFileInputRef}
@@ -701,27 +658,31 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                 void uploadImage(file, path);
               }}
             />
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, width: '100%' }}>
               <Button
                 type="button"
                 variant="light"
                 disabled={!canEditImage || uploadingImage}
-                leftSection={uploadingImage ? <Loader size="xs" /> : undefined}
+                aria-label={uploadingImage ? 'Subiendo imagen' : 'Subir imagen'}
+                title={uploadingImage ? 'Subiendo imagen' : 'Subir imagen'}
                 onClick={() => imageFileInputRef.current?.click()}
-              >
-                {uploadingImage ? 'Subiendo…' : 'Subir imagen'}
+                style={{ flex: 1 }}
+              >{uploadingImage ? <Loader size="xs" /> : <Upload size={16} aria-hidden="true" />}
               </Button>
               <Button
                 type="button"
                 variant="subtle"
                 color="red"
+                aria-label="Quitar imagen"
+                title="Quitar imagen"
                 disabled={!canEditImage || uploadingImage || !value}
+                style={{ flex: 1 }}
                 onClick={() => {
                   setUploadError('');
                   updateNestedProperty(path, '');
                 }}
               >
-                Quitar imagen
+                <ImageMinus size={16} aria-hidden="true" />
               </Button>
             </div>
             {uploadError ? <Alert color="red" variant="light">{uploadError}</Alert> : null}
@@ -782,9 +743,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         <TextInput
           key={path.join('.')}
           label={label}
-          description={key === 'imageAssetId'
-            ? 'Identificador de la imagen asociada al bloque'
-            : maxLength ? `${characterCount} caracteres` : undefined}
+          description={maxLength ? `${characterCount} caracteres` : undefined}
           placeholder={key === 'ctaUrl' || key === 'url' ? 'https://ejemplo.com' : undefined}
           maxLength={maxLength}
           disabled={!editorData?.project.canEdit}
@@ -1442,6 +1401,66 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
           ))}
           {catalogBlocks.length === 0 && (
             <Text size="sm" c="dimmed">No encontramos bloques con esa búsqueda.</Text>
+          )}
+        </Stack>
+      </Modal>
+      <Modal
+        opened={imagePickerTargetPath !== null}
+        onClose={() => setImagePickerTargetPath(null)}
+        title="Elegir imagen del proyecto"
+        centered
+        size="lg"
+      >
+        <Stack gap="md">
+          <input
+            ref={imagePickerFileInputRef}
+            type="file"
+            hidden
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0] ?? null;
+              event.currentTarget.value = '';
+              void uploadImage(file, imagePickerTargetPath ?? ['imageAssetId']).then((uploaded) => {
+                if (uploaded) setImagePickerTargetPath(null);
+              });
+            }}
+          />
+          <Button type="button" variant="light" leftSection={<Upload size={16} />}
+            disabled={!editorData?.project.canEdit || uploadingImage}
+            onClick={() => imagePickerFileInputRef.current?.click()}>
+            Subir nueva imagen
+          </Button>
+          {uploadError && <Alert color="red" role="alert">{uploadError}</Alert>}
+          {projectAssets.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+            {projectAssets.map((asset) => (
+              <Card key={asset.id} withBorder padding="sm" radius="md">
+                <Stack gap="xs">
+                  <Text size="sm" fw={500} lineClamp={2} title={asset.filename}>{asset.filename}</Text>
+                  <Button type="button" variant="subtle" color="gray" fullWidth
+                    aria-label={`Seleccionar ${asset.filename}`} disabled={!editorData?.project.canEdit}
+                    onClick={() => {
+                      if (imagePickerTargetPath) updateNestedProperty(imagePickerTargetPath, asset.id);
+                      setImagePickerTargetPath(null);
+                    }}
+                    style={{ display: 'block', height: 'auto', padding: 0, whiteSpace: 'normal' }}>
+                    {/* This image is served through the app's private asset route, so keep its URL unoptimized. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/api/assets/${encodeURIComponent(asset.id)}`} alt="" loading="lazy"
+                      style={{ display: 'block', width: '100%', height: 128, objectFit: 'cover', borderRadius: 6 }} />
+                  </Button>
+                  <Button type="button" variant="subtle" color="red" size="xs"
+                    aria-label={`Eliminar ${asset.filename}`} title={`Eliminar ${asset.filename}`}
+                    disabled={!editorData?.project.canEdit || deletingAssetId !== null || uploadingImage}
+                    onClick={() => setAssetPendingDelete(asset)}>
+                    <Trash2 size={15} aria-hidden="true" />
+                  </Button>
+                </Stack>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Text size="sm" c="dimmed">No hay imágenes subidas al proyecto.</Text>
           )}
         </Stack>
       </Modal>
