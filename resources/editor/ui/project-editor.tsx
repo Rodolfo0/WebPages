@@ -233,6 +233,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [saveError, setSaveError] = useState('');
   const [reloadingDraft, setReloadingDraft] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageDragActive, setImageDragActive] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [projectAssets, setProjectAssets] = useState<EditorAsset[]>([]);
   const [imagePickerTargetPath, setImagePickerTargetPath] = useState<(string | number)[] | null>(null);
@@ -452,6 +453,55 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'No se pudo subir la imagen.');
       return false;
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  async function uploadImages(files: File[], targetPath: (string | number)[] = ['imageAssetId']) {
+    if (files.length === 0 || !editorData?.project.canEdit) return false;
+    setUploadingImage(true);
+    setUploadError('');
+    try {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      const uploadedAssets: EditorAsset[] = [];
+      const failures: string[] = [];
+
+      for (const file of files) {
+        if (!allowedTypes.includes(file.type)) {
+          failures.push(`${file.name}: tipo de imagen no permitido.`);
+          continue;
+        }
+
+        try {
+          const form = new FormData();
+          form.set('file', file);
+          const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, {
+            method: 'POST',
+            cache: 'no-store',
+            body: form,
+          });
+          const result = await response.json().catch(() => ({})) as {
+            asset?: EditorAsset;
+            message?: string;
+          };
+          if (!response.ok) throw new Error(result.message ?? 'No se pudo subir la imagen.');
+          if (!result.asset?.id) throw new Error('La subida no devolvió un identificador de imagen.');
+          uploadedAssets.push(result.asset);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'No se pudo subir la imagen.';
+          failures.push(`${file.name}: ${message}`);
+        }
+      }
+
+      if (uploadedAssets.length > 0) {
+        const uploadedIds = new Set(uploadedAssets.map((asset) => asset.id));
+        setProjectAssets((current) => [...uploadedAssets, ...current.filter((asset) => !uploadedIds.has(asset.id))]);
+        updateNestedProperty(targetPath, uploadedAssets[uploadedAssets.length - 1].id);
+      }
+
+      if (failures.length > 0) setUploadError(failures.join(' '));
+      return uploadedAssets.length === files.length && failures.length === 0;
     } finally {
       setUploadingImage(false);
     }
@@ -1418,18 +1468,61 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
             hidden
             accept="image/jpeg,image/png,image/webp"
             onChange={(event) => {
-              const file = event.currentTarget.files?.[0] ?? null;
+              const files = Array.from(event.currentTarget.files ?? []);
               event.currentTarget.value = '';
-              void uploadImage(file, imagePickerTargetPath ?? ['imageAssetId']).then((uploaded) => {
+              void uploadImages(files, imagePickerTargetPath ?? ['imageAssetId']).then((uploaded) => {
                 if (uploaded) setImagePickerTargetPath(null);
               });
             }}
+            multiple
           />
-          <Button type="button" variant="light" leftSection={<Upload size={16} />}
-            disabled={!editorData?.project.canEdit || uploadingImage}
-            onClick={() => imagePickerFileInputRef.current?.click()}>
-            Subir nueva imagen
-          </Button>
+          <Card
+            withBorder
+            padding="md"
+            radius="md"
+            role="region"
+            aria-label="Zona para soltar imágenes"
+            onDragEnter={(event) => {
+              event.preventDefault();
+              if (!uploadingImage && editorData?.project.canEdit) setImageDragActive(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'copy';
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+                setImageDragActive(false);
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setImageDragActive(false);
+              if (uploadingImage || !editorData?.project.canEdit) return;
+              const files = Array.from(event.dataTransfer.files);
+              void uploadImages(files, imagePickerTargetPath ?? ['imageAssetId']).then((uploaded) => {
+                if (uploaded) setImagePickerTargetPath(null);
+              });
+            }}
+            style={{
+              borderStyle: 'dashed',
+              borderColor: imageDragActive ? 'var(--mantine-color-indigo-6)' : 'var(--mantine-color-gray-4)',
+              backgroundColor: imageDragActive ? 'var(--mantine-color-indigo-0)' : undefined,
+              textAlign: 'center',
+            }}
+          >
+            <Stack align="center" gap="xs">
+              <Text size="sm" fw={500}>Arrastra una o varias imágenes aquí para subirlas</Text>
+              <Text size="xs" c="dimmed">JPEG, PNG o WebP.</Text>
+              <Button type="button" variant="light"
+                leftSection={uploadingImage ? <Loader size="xs" /> : <Upload size={16} />}
+                disabled={!editorData?.project.canEdit || uploadingImage}
+                onClick={() => imagePickerFileInputRef.current?.click()}>
+                {uploadingImage ? 'Subiendo imágenes…' : 'Elegir archivos'}
+              </Button>
+            </Stack>
+          </Card>
           {uploadError && <Alert color="red" role="alert">{uploadError}</Alert>}
           {projectAssets.length > 0 ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
