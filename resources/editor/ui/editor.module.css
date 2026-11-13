@@ -20,13 +20,12 @@
 }
 
 .editorHeader {
-  display: flex;
-  flex-wrap: wrap;
-  min-height: 2.75rem;
+  display: grid;
+  min-height: 2rem;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.1rem 0 0.3rem;
+  padding: 0;
 }
 
 .editorHeading {
@@ -40,11 +39,23 @@
 .editorTitle {
   margin: 0;
   color: #171b2b;
-  font-size: clamp(1.35rem, 2vw, 1.7rem);
+  font-size: clamp(1.1rem, 1.5vw, 1.3rem);
   font-weight: 650;
   letter-spacing: -0.045em;
   line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.editorToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.editorHeader > a {
+  justify-self: end;
 }
 
 .saveBadge {
@@ -73,8 +84,10 @@
 }
 
 .canvasPanel {
+  display: flex;
   grid-area: canvas;
   height: 100%;
+  flex-direction: column;
 }
 
 .sectionsColumn {
@@ -85,16 +98,6 @@
 .inspectorPanel {
   grid-area: inspector;
   height: 100%;
-}
-
-.canvasSurface {
-  display: flex;
-  height: 100%;
-  min-height: 0;
-  flex-direction: column;
-  border-color: #e1e5ef;
-  background: #edf0f6;
-  box-shadow: 0 4px 18px rgb(31 42 78 / 3%);
 }
 
 .sectionsSurface,
@@ -391,11 +394,6 @@
   user-select: none;
 }
 
-.canvasStack {
-  min-height: 0;
-  flex: 1 1 0;
-}
-
 @media (min-width: 62rem) and (max-width: 89.99rem) {
   .workspace {
     grid-template-areas: 'canvas sections' 'canvas inspector';
@@ -431,16 +429,10 @@
     height: auto;
   }
 
-  .canvasSurface,
   .sectionsSurface,
   .inspectorSurface {
     height: auto;
     overflow: visible;
-  }
-
-  .canvasStack {
-    height: auto;
-    flex: initial;
   }
 
   .sectionsStack,
@@ -479,6 +471,17 @@
   }
 }
 
+@media (max-width: 61.99rem) {
+  .editorHeader {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .editorToolbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
 .workspaceCollapsed {
   grid-template-areas: 'canvas';
   grid-template-columns: minmax(0, 1fr);
@@ -489,5 +492,15 @@
     grid-template-areas: 'canvas';
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 38rem) {
+  .editorHeader {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editorToolbar {
+    grid-row: auto;
   }
 }

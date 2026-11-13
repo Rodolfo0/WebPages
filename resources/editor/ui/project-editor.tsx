@@ -1195,7 +1195,20 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               </Badge>
             )}
           </div>
-          <Button component="a" href="/app/projects" variant="default">
+          {editorData && (
+            <div className={styles.editorToolbar}>
+              <Button size="xs" variant="default" aria-label="Deshacer" disabled={!editorData.project.canEdit || history.past.length === 0} onClick={undoDocumentChange}><Undo2 size={14} aria-hidden="true" /></Button>
+              <Button size="xs" variant="default" aria-label="Rehacer" disabled={!editorData.project.canEdit || history.future.length === 0} onClick={redoDocumentChange}><Redo2 size={14} aria-hidden="true" /></Button>
+              <Button.Group aria-label="Tamaño de vista previa">
+                <Button size="xs" variant={previewMode === 'desktop' ? 'filled' : 'default'} aria-pressed={previewMode === 'desktop'} aria-label="Vista de escritorio" onClick={() => setPreviewMode('desktop')}><Monitor size={14} aria-hidden="true" /> Escritorio</Button>
+                <Button size="xs" variant={previewMode === 'mobile' ? 'filled' : 'default'} aria-pressed={previewMode === 'mobile'} aria-label="Vista móvil" onClick={() => setPreviewMode('mobile')}><Smartphone size={14} aria-hidden="true" /> Móvil</Button>
+              </Button.Group>
+              <Button size="xs" variant="default" aria-label={sectionsPanelVisible ? 'Ocultar panel lateral' : 'Mostrar panel lateral'} aria-pressed={!sectionsPanelVisible} onClick={() => setSectionsPanelVisible((visible) => !visible)}>
+                {sectionsPanelVisible ? 'Ocultar panel' : 'Mostrar panel'}
+              </Button>
+            </div>
+          )}
+          <Button component="a" href="/app/projects" size="xs" variant="default">
             Volver a proyectos
           </Button>
         </header>
@@ -1253,56 +1266,35 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         ) : editorData ? (
           <div className={`${styles.workspace} ${sectionsPanelVisible ? '' : styles.workspaceCollapsed}`}>
             <section aria-label="Canvas del sitio" className={styles.canvasPanel}>
-              <Card withBorder radius="lg" padding="sm" className={styles.canvasSurface}>
-                <Stack gap="md" className={styles.canvasStack}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Title order={2} className={styles.panelHeading}>Vista de página</Title>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button.Group aria-label="Tamaño de vista previa">
-                        <Button variant={previewMode === 'desktop' ? 'filled' : 'default'} aria-pressed={previewMode === 'desktop'} aria-label="Vista de escritorio" onClick={() => setPreviewMode('desktop')}><Monitor size={16} aria-hidden="true" /> Escritorio</Button>
-                        <Button variant={previewMode === 'mobile' ? 'filled' : 'default'} aria-pressed={previewMode === 'mobile'} aria-label="Vista móvil" onClick={() => setPreviewMode('mobile')}><Smartphone size={16} aria-hidden="true" /> Móvil</Button>
-                      </Button.Group>
-                      <Button variant="default" aria-label={sectionsPanelVisible ? 'Ocultar panel lateral' : 'Mostrar panel lateral'} aria-pressed={!sectionsPanelVisible} onClick={() => setSectionsPanelVisible((visible) => !visible)}>
-                        {sectionsPanelVisible ? 'Ocultar panel' : 'Mostrar panel'}
-                      </Button>
-                      <Button variant="default" aria-label="Deshacer" disabled={!editorData.project.canEdit || history.past.length === 0} onClick={undoDocumentChange}><Undo2 size={16} aria-hidden="true" /></Button>
-                      <Button variant="default" aria-label="Rehacer" disabled={!editorData.project.canEdit || history.future.length === 0} onClick={redoDocumentChange}><Redo2 size={16} aria-hidden="true" /></Button>
-                      <Badge variant="light" color={editorData.project.canEdit ? 'indigo' : 'gray'}>
-                        {editorData.project.canEdit ? 'Editable' : 'Solo lectura'}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div ref={canvasViewportRef} data-editor-command-scope="canvas" className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
-                    {editorData.draftDocument.pages.map((page) => (
-                      <article key={page.id} className={styles.pageCanvas} data-preview={previewMode} aria-label={`Página ${page.path}`}>
-                        {page.blocks.map((block, blockIndex) => (
-                          <Fragment key={block.id}>
-                          {dropPlaceholder(page.id, block.id, 'before')}
-                          <CanvasBlock
-                            block={block}
-                            blockIndex={blockIndex}
-                            pageId={page.id}
-                            theme={editorData.draftDocument.site.theme}
-                            selected={isSelected(selection, page.id, block.id)}
-                            onSelect={selectBlock}
-                            registerFrame={registerCanvasBlock}
-                            draggable={editorData.project.canEdit}
-                            onDragStart={() => { dragTargetBounds.current.clear(); setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
-                            onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
-                            onDragOver={handleBlockDragOver}
-                            onDrop={dropBlock}
-                            onMove={(blockSelection, targetIndex) => reorderBlock(blockSelection.pageId, blockSelection.blockId, targetIndex)}
-                            onRequestDelete={(blockSelection) => requestDeleteBlock(blockSelection.pageId, blockSelection.blockId)}
-                            onDuplicate={(blockSelection) => duplicateBlock(blockSelection.pageId, blockSelection.blockId)}
-                          />
-                          {dropPlaceholder(page.id, block.id, 'after')}
-                          </Fragment>
-                        ))}
-                      </article>
+              <div ref={canvasViewportRef} data-editor-command-scope="canvas" className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
+                {editorData.draftDocument.pages.map((page) => (
+                  <article key={page.id} className={styles.pageCanvas} data-preview={previewMode} aria-label={`Página ${page.path}`}>
+                    {page.blocks.map((block, blockIndex) => (
+                      <Fragment key={block.id}>
+                      {dropPlaceholder(page.id, block.id, 'before')}
+                      <CanvasBlock
+                        block={block}
+                        blockIndex={blockIndex}
+                        pageId={page.id}
+                        theme={editorData.draftDocument.site.theme}
+                        selected={isSelected(selection, page.id, block.id)}
+                        onSelect={selectBlock}
+                        registerFrame={registerCanvasBlock}
+                        draggable={editorData.project.canEdit}
+                        onDragStart={() => { dragTargetBounds.current.clear(); setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
+                        onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
+                        onDragOver={handleBlockDragOver}
+                        onDrop={dropBlock}
+                        onMove={(blockSelection, targetIndex) => reorderBlock(blockSelection.pageId, blockSelection.blockId, targetIndex)}
+                        onRequestDelete={(blockSelection) => requestDeleteBlock(blockSelection.pageId, blockSelection.blockId)}
+                        onDuplicate={(blockSelection) => duplicateBlock(blockSelection.pageId, blockSelection.blockId)}
+                      />
+                      {dropPlaceholder(page.id, block.id, 'after')}
+                      </Fragment>
                     ))}
-                  </div>
-                </Stack>
-              </Card>
+                  </article>
+                ))}
+              </div>
             </section>
 
             {sectionsPanelVisible && <aside aria-label="Lista de secciones" className={styles.sectionsColumn}>
