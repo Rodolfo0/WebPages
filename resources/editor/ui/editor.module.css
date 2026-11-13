@@ -274,12 +274,19 @@
 .sectionRow {
   display: grid;
   min-width: 0;
-  gap: 0.1rem;
   padding: 0.2rem;
   border: 1px solid #e9ecf3;
   border-radius: 0.55rem;
   background: var(--surface);
-  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  grid-template-rows: 1fr;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, grid-template-rows 180ms ease 140ms, padding 180ms ease 140ms, border-width 180ms ease 140ms;
+}
+
+.sectionRowInner {
+  display: grid;
+  min-height: 0;
+  gap: 0.1rem;
+  overflow: hidden;
 }
 
 .sectionRow:hover {
@@ -298,6 +305,55 @@
 
 .sectionRow[draggable='true']:active {
   cursor: grabbing;
+}
+
+.sectionRow {
+  cursor: grab;
+}
+
+.sectionSelect {
+  cursor: grab;
+}
+
+.sectionSelect:active {
+  cursor: grabbing;
+}
+
+.sectionRow[data-dragging-source='true'] {
+  visibility: hidden;
+  grid-template-rows: 0fr;
+  padding-block: 0;
+  border-width: 0;
+}
+
+.sectionDropSlot {
+  min-height: 0.5rem;
+  border: 2px dashed transparent;
+  border-radius: var(--mantine-radius-sm);
+  transition: min-height 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.sectionDropSlot[data-active='true'] {
+  min-height: 2rem;
+  border-color: var(--mantine-color-indigo-5);
+  background: color-mix(in srgb, var(--mantine-color-indigo-1) 65%, transparent);
+}
+
+.sectionDropSlot[data-source-spacer='true'] {
+  min-height: 0;
+  transition-delay: 140ms;
+}
+
+.sectionDragOverlay {
+  z-index: 500;
+  pointer-events: none;
+}
+
+.sectionDragOverlay > .sectionRow {
+  width: 100%;
+  cursor: grabbing;
+  background: var(--surface);
+  box-shadow: 0 10px 24px rgb(33 41 67 / 16%), 0 2px 6px rgb(33 41 67 / 8%);
 }
 
 .sectionRow > .dropPlaceholder {

@@ -17,6 +17,7 @@ import {
 } from '@mantine/core';
 import { useHotkeys } from '@mantine/hooks';
 import type { HotkeyItem } from '@mantine/hooks';
+import { DragDropProvider, DragOverlay, KeyboardSensor, PointerSensor, useDraggable, useDroppable } from '@dnd-kit/react';
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ArrowDown, ArrowUp, Copy, ImageMinus, Monitor, Pencil, Redo2, Smartphone, Trash2, Undo2, Upload } from 'lucide-react';
@@ -208,6 +209,110 @@ function CanvasBlock({
         <BlockRenderer blockId={block.id} theme={theme} props={block.props} />
       </div>
     </div>
+  );
+}
+
+type StructureDragData = {
+  kind: 'section';
+  pageId: string;
+  blockId: string;
+  blockIndex: number;
+  blockCount: number;
+  label: string;
+  pagePath: string;
+  selected: boolean;
+};
+
+type StructureDropData = {
+  kind: 'section-position';
+  pageId: string;
+  blockId: string;
+  position: DropTarget['position'];
+};
+
+const defaultPointerActivationConstraints = PointerSensor.defaults.activationConstraints;
+function getStructurePointerActivationConstraints(event: PointerEvent) {
+  if (typeof defaultPointerActivationConstraints !== 'function') return defaultPointerActivationConstraints;
+  return defaultPointerActivationConstraints(event, { handle: undefined } as Parameters<typeof defaultPointerActivationConstraints>[1]);
+}
+
+const structurePointerSensor = PointerSensor.configure({
+  activatorElements: (source) => [source.handle, source.element?.querySelector('[data-section-actions]')].filter((element): element is Element => element !== null && element !== undefined),
+  activationConstraints: (event) => getStructurePointerActivationConstraints(event),
+  preventActivation: (event, source) => {
+    const target = event.target;
+    const handle = source.handle;
+    const actionArea = source.element?.querySelector('[data-section-actions]');
+    return !(target instanceof Element && (handle?.contains(target) || actionArea?.contains(target)));
+  },
+});
+
+function StructureSectionRow({
+  id,
+  data,
+  canEdit,
+  onKeyDown,
+  children,
+}: {
+  id: string;
+  data: StructureDragData;
+  canEdit: boolean;
+  onKeyDown: React.KeyboardEventHandler<HTMLDivElement>;
+  children: (handleRef: (element: Element | null) => void) => React.ReactNode;
+}) {
+  const { ref, handleRef, isDragSource } = useDraggable({ id, data, disabled: !canEdit });
+
+  return (
+    <div ref={ref} className={styles.sectionRow} data-selected={data.selected} data-dragging-source={isDragSource} onKeyDown={onKeyDown}>
+      <div className={styles.sectionRowInner}>{children(handleRef)}</div>
+    </div>
+  );
+}
+
+function StructureDropSlot({ data }: { data: StructureDropData }) {
+  const { ref, isDropTarget } = useDroppable({ id: `slot:${data.pageId}:${data.blockId}:${data.position}`, data });
+  return <div ref={ref} className={styles.sectionDropSlot} data-active={isDropTarget} aria-hidden="true" />;
+}
+
+function StructureSectionContents({
+  data,
+  canEdit,
+  onSelect,
+  onMove,
+  onDuplicate,
+  onDelete,
+  dragHandleRef,
+}: {
+  data: StructureDragData;
+  canEdit: boolean;
+  onSelect: () => void;
+  onMove: (direction: -1 | 1) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  dragHandleRef?: (element: Element | null) => void;
+}) {
+  return (
+    <>
+      <Button ref={dragHandleRef} data-drag-preview className={styles.sectionSelect} fullWidth size="compact-sm" variant={data.selected ? 'light' : 'subtle'} color={data.selected ? 'indigo' : 'gray'} aria-pressed={data.selected} aria-label={`Seleccionar sección ${data.blockIndex + 1}: ${data.label}, página ${data.pagePath}`} title={data.label} onClick={onSelect} onKeyDown={(event) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+        event.preventDefault();
+        onSelect();
+        onMove(event.key === 'ArrowUp' ? -1 : 1);
+      }}>
+        <span className={styles.sectionIndex}>{data.blockIndex + 1}.</span>
+        <span className={styles.sectionLabel}>{data.label}</span>
+      </Button>
+      <div className={styles.sectionActions} data-section-actions>
+        <div className={styles.moveActions}>
+          <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${data.label} arriba`} title={`Mover ${data.label} arriba`} disabled={!canEdit || data.blockIndex === 0} onClick={() => onMove(-1)}><ArrowUp size={16} aria-hidden="true" /></Button>
+          <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${data.label} abajo`} title={`Mover ${data.label} abajo`} disabled={!canEdit || data.blockIndex === data.blockCount - 1} onClick={() => onMove(1)}><ArrowDown size={16} aria-hidden="true" /></Button>
+        </div>
+        <div className={styles.compositionActions}>
+          <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Duplicar ${data.label}`} title={`Duplicar ${data.label}`} disabled={!canEdit} onClick={onDuplicate}><Copy size={16} aria-hidden="true" /></Button>
+          <Button className={styles.iconAction} size="compact-sm" color="red" variant="subtle" aria-label={`Eliminar ${data.label}`} title={`Eliminar ${data.label}`} disabled={!canEdit} onClick={onDelete}><Trash2 size={16} aria-hidden="true" /></Button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1323,6 +1428,32 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                     Agregar sección
                   </Button>
                   <nav aria-label="Secciones del sitio" className={styles.sectionsNav}>
+                    <DragDropProvider
+                      sensors={[structurePointerSensor, KeyboardSensor]}
+                      onDragStart={(event) => {
+                        const source = event.operation.source?.data as StructureDragData | undefined;
+                        if (source?.kind === 'section') {
+                          setDraggedBlock({ pageId: source.pageId, blockId: source.blockId });
+                          setDropTarget(null);
+                        }
+                      }}
+                      onDragEnd={(event) => {
+                      const source = event.operation.source?.data as StructureDragData | undefined;
+                      const target = event.operation.target?.data as StructureDropData | undefined;
+                      if (!event.canceled && source?.kind === 'section' && target?.kind === 'section-position' && source.pageId === target.pageId) {
+                        const page = editorData.draftDocument.pages.find((candidate) => candidate.id === source.pageId);
+                        const sourceIndex = page?.blocks.findIndex((candidate) => candidate.id === source.blockId) ?? -1;
+                        const targetIndex = page?.blocks.findIndex((candidate) => candidate.id === target.blockId) ?? -1;
+                        if (sourceIndex >= 0 && targetIndex >= 0) {
+                          let destinationIndex = targetIndex + (target.position === 'after' ? 1 : 0);
+                          if (sourceIndex < destinationIndex) destinationIndex -= 1;
+                          reorderBlock(source.pageId, source.blockId, destinationIndex);
+                        }
+                      }
+                      setDraggedBlock(null);
+                      setDropTarget(null);
+                    }}
+                    >
                     <Stack gap="md">
                       {editorData.draftDocument.pages.map((page) => (
                         <section key={page.id} aria-label={`Página ${page.path}`}>
@@ -1332,65 +1463,52 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                               {page.blocks.map((block, blockIndex) => {
                                 const definition = requireBlock(portfolioBlockRegistry, block.type);
                                 const selected = isSelected(selection, page.id, block.id);
+                                const dragData: StructureDragData = {
+                                  kind: 'section',
+                                  pageId: page.id,
+                                  blockId: block.id,
+                                  blockIndex,
+                                  blockCount: page.blocks.length,
+                                  label: definition.label,
+                                  pagePath: page.path,
+                                  selected,
+                                };
                                 return (
-                                  <div
-                                    key={block.id}
-                                    className={styles.sectionRow}
-                                    data-selected={selected}
-                                    draggable={editorData.project.canEdit}
-                                    onDragStart={(event) => {
-                                      event.dataTransfer.effectAllowed = 'move';
-                                      event.dataTransfer.setData('text/plain', block.id);
-                                      dragTargetBounds.current.clear();
-                                      const dragPreview = event.currentTarget.querySelector<HTMLElement>('[data-drag-preview]');
-                                      if (dragPreview && typeof event.dataTransfer.setDragImage === 'function') {
-                                        const bounds = dragPreview.getBoundingClientRect();
-                                        event.dataTransfer.setDragImage(
-                                          dragPreview,
-                                          bounds.width * 0.5,
-                                          bounds.height * 1.35,
-                                        );
-                                      }
-                                      setDraggedBlock({ pageId: page.id, blockId: block.id });
-                                      setDropTarget(null);
-                                    }}
-                                    onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
-                                    onDragOver={(event) => handleBlockDragOver(event, { pageId: page.id, blockId: block.id })}
-                                    onDrop={(event) => dropBlock(event, { pageId: page.id, blockId: block.id })}
-                                    onKeyDown={(event) => {
-                                    if (event.shiftKey && event.key.toLowerCase() === 'd') {
-                                      event.preventDefault();
-                                      selectBlock({ pageId: page.id, blockId: block.id });
-                                      duplicateBlock(page.id, block.id);
-                                      return;
-                                    }
-                                    if (event.key !== 'Delete' && event.key !== 'Del' && event.key !== 'Backspace') return;
-                                    event.preventDefault();
-                                    selectBlock({ pageId: page.id, blockId: block.id });
-                                    requestDeleteBlock(page.id, block.id);
-                                  }}>
-                                    {dropPlaceholder(page.id, block.id, 'before')}
-                                    <Button data-drag-preview className={styles.sectionSelect} fullWidth size="compact-sm" variant={selected ? 'light' : 'subtle'} color={selected ? 'indigo' : 'gray'} aria-pressed={selected} aria-label={`Seleccionar sección ${blockIndex + 1}: ${definition.label}, página ${page.path}`} title={definition.label} onClick={() => selectBlock({ pageId: page.id, blockId: block.id })} onKeyDown={(event) => {
-                                      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                                      event.preventDefault();
-                                      selectBlock({ pageId: page.id, blockId: block.id });
-                                      reorderBlock(page.id, block.id, blockIndex + (event.key === 'ArrowUp' ? -1 : 1));
-                                    }}>
-                                      <span className={styles.sectionIndex}>{blockIndex + 1}.</span>
-                                      <span className={styles.sectionLabel}>{definition.label}</span>
-                                    </Button>
-                                    <div className={styles.sectionActions}>
-                                      <div className={styles.moveActions}>
-                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${definition.label} arriba`} title={`Mover ${definition.label} arriba`} disabled={!editorData.project.canEdit || blockIndex === 0} onClick={() => reorderBlock(page.id, block.id, blockIndex - 1)}><ArrowUp size={16} aria-hidden="true" /></Button>
-                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Mover ${definition.label} abajo`} title={`Mover ${definition.label} abajo`} disabled={!editorData.project.canEdit || blockIndex === page.blocks.length - 1} onClick={() => reorderBlock(page.id, block.id, blockIndex + 1)}><ArrowDown size={16} aria-hidden="true" /></Button>
-                                      </div>
-                                      <div className={styles.compositionActions}>
-                                        <Button className={styles.iconAction} size="compact-sm" variant="subtle" color="gray" aria-label={`Duplicar ${definition.label}`} title={`Duplicar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => duplicateBlock(page.id, block.id)}><Copy size={16} aria-hidden="true" /></Button>
-                                        <Button className={styles.iconAction} size="compact-sm" color="red" variant="subtle" aria-label={`Eliminar ${definition.label}`} title={`Eliminar ${definition.label}`} disabled={!editorData.project.canEdit} onClick={() => requestDeleteBlock(page.id, block.id)}><Trash2 size={16} aria-hidden="true" /></Button>
-                                      </div>
-                                    </div>
-                                    {dropPlaceholder(page.id, block.id, 'after')}
-                                  </div>
+                                  <Fragment key={block.id}>
+                                    {editorData.project.canEdit && (
+                                      draggedBlock?.pageId === page.id && draggedBlock.blockId === block.id
+                                        ? <div className={styles.sectionDropSlot} data-source-spacer="true" aria-hidden="true" />
+                                        : <StructureDropSlot data={{ kind: 'section-position', pageId: page.id, blockId: block.id, position: 'before' }} />
+                                    )}
+                                    <StructureSectionRow
+                                      id={`section:${page.id}:${block.id}`}
+                                      data={dragData}
+                                      canEdit={editorData.project.canEdit}
+                                      onKeyDown={(event) => {
+                                        if (event.shiftKey && event.key.toLowerCase() === 'd') {
+                                          event.preventDefault();
+                                          selectBlock({ pageId: page.id, blockId: block.id });
+                                          duplicateBlock(page.id, block.id);
+                                          return;
+                                        }
+                                        if (event.key !== 'Delete' && event.key !== 'Del' && event.key !== 'Backspace') return;
+                                        event.preventDefault();
+                                        selectBlock({ pageId: page.id, blockId: block.id });
+                                        requestDeleteBlock(page.id, block.id);
+                                      }}
+                                    >
+                                      {(dragHandleRef) => <StructureSectionContents
+                                        data={dragData}
+                                        canEdit={editorData.project.canEdit}
+                                        onSelect={() => selectBlock({ pageId: page.id, blockId: block.id })}
+                                        onMove={(direction) => reorderBlock(page.id, block.id, blockIndex + direction)}
+                                        onDuplicate={() => duplicateBlock(page.id, block.id)}
+                                        onDelete={() => requestDeleteBlock(page.id, block.id)}
+                                        dragHandleRef={dragHandleRef}
+                                      />}
+                                    </StructureSectionRow>
+                                    {editorData.project.canEdit && blockIndex === page.blocks.length - 1 && <StructureDropSlot data={{ kind: 'section-position', pageId: page.id, blockId: block.id, position: 'after' }} />}
+                                  </Fragment>
                                 );
                               })}
                             </Stack>
@@ -1400,6 +1518,27 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                         </section>
                       ))}
                     </Stack>
+                    <DragOverlay className={styles.sectionDragOverlay} dropAnimation={null}>
+                      {(source) => {
+                        const data = source.data as StructureDragData;
+                        if (data.kind !== 'section') return null;
+                        return (
+                          <div className={styles.sectionRow} data-selected={data.selected} aria-hidden="true" inert>
+                            <div className={styles.sectionRowInner}>
+                              <StructureSectionContents
+                                data={data}
+                                canEdit
+                                onSelect={() => {}}
+                                onMove={() => {}}
+                                onDuplicate={() => {}}
+                                onDelete={() => {}}
+                              />
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </DragOverlay>
+                    </DragDropProvider>
                   </nav>
                 </Stack>
               </Card>
