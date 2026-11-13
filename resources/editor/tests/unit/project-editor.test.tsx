@@ -50,8 +50,11 @@ describe('ProjectEditor properties panel', () => {
       disconnect() {}
     });
     fetchMock.mockReset();
-    fetchMock.mockImplementation(async (_input, init) => {
+    fetchMock.mockImplementation(async (input, init) => {
       if (init?.method === 'PATCH') return jsonResponse({ message: 'No se pudo guardar.' }, 503);
+      if (String(input).endsWith('/assets')) {
+        return jsonResponse({ assets: [{ id: 'asset-preview', filename: 'preview-image.png', createdAt: '2026-11-10T00:00:00.000Z' }] });
+      }
       return jsonResponse({
         project: {
           id: 'project-1',
@@ -71,6 +74,19 @@ describe('ProjectEditor properties panel', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('shows uploaded images in a selectable gallery modal', async () => {
+    renderEditor();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cambiar imagen' }));
+
+    await waitFor(() => {
+      expect(document.body.querySelector('img[src="/api/assets/asset-preview"]')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar preview-image.png' }));
+    expect(screen.queryByRole('dialog', { name: 'Elegir imagen del proyecto' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('preview-image.png')[0]).toBeInTheDocument();
   });
 
   it('edits text and keeps the temporary value visible after save failure', async () => {
@@ -294,11 +310,11 @@ describe('ProjectEditor properties panel', () => {
     expect(await screen.findByText(/debe comenzar con http:\/\/|debe comenzar con https:\/\/|begin with http/i)).toBeInTheDocument();
   });
 
-  it('shows the image identifier as readonly with upload and clear actions', async () => {
+  it('does not show the image identifier and provides upload and clear actions', async () => {
     renderEditor();
 
-    const image = (await screen.findAllByLabelText('Imagen'))[0];
-    expect(image).toHaveAttribute('readonly');
+    await screen.findByRole('button', { name: 'Cambiar imagen' });
+    expect(screen.queryByLabelText('Imagen')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Subir imagen|Cambiar imagen/ })[0]).toBeEnabled();
     expect(screen.getAllByRole('button', { name: 'Quitar imagen' })[0]).toBeInTheDocument();
   });
@@ -306,14 +322,14 @@ describe('ProjectEditor properties panel', () => {
   it('edits image fields, alignment, visibility and spacing', async () => {
     renderEditor();
 
-    await screen.findAllByLabelText('Imagen');
+    await screen.findByRole('button', { name: 'Cambiar imagen' });
     fireEvent.click(screen.getAllByRole('button', { name: 'Quitar imagen' })[0]);
     fireEvent.change(screen.getAllByLabelText('Texto alternativo')[0], { target: { value: 'Portrait of Alex' } });
     fireEvent.click(screen.getAllByRole('combobox', { name: 'Alineación' })[0]);
     fireEvent.click(await screen.findByText('Derecha'));
     fireEvent.click(screen.getByRole('switch', { name: 'Ocultar sección' }));
 
-    expect(screen.getAllByLabelText('Imagen')[0]).toHaveValue('');
+    expect(screen.getAllByText('Sin imagen seleccionada')[0]).toBeInTheDocument();
     expect(screen.getAllByLabelText('Texto alternativo')[0]).toHaveValue('Portrait of Alex');
     expect(screen.getAllByRole('combobox', { name: 'Alineación' })[0]).toHaveValue('Derecha');
     expect(screen.getAllByRole('combobox', { name: 'Espaciado' })[0]).toHaveValue('Amplio');

@@ -19,7 +19,7 @@ import { useHotkeys } from '@mantine/hooks';
 import type { HotkeyItem } from '@mantine/hooks';
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, Copy, Monitor, Redo2, Smartphone, Trash2, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, ImageMinus, Monitor, Pencil, Redo2, Smartphone, Trash2, Undo2, Upload } from 'lucide-react';
 import { create, type Delta } from 'jsondiffpatch';
 import { portfolioBlockRegistry, requireBlock } from '../../blocks';
 import type { BlockProps, JsonValue, SiteDocument } from '../../site-document';
@@ -65,6 +65,8 @@ type EditorData = {
   project: ProjectSummary;
   draftDocument: SiteDocument;
 };
+
+type EditorAsset = { id: string; filename: string; createdAt: string };
 
 type BlockSelection = {
   pageId: string;
@@ -231,7 +233,16 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const [saveError, setSaveError] = useState('');
   const [reloadingDraft, setReloadingDraft] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageDragActive, setImageDragActive] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [projectAssets, setProjectAssets] = useState<EditorAsset[]>([]);
+  const [imagePickerTargetPath, setImagePickerTargetPath] = useState<(string | number)[] | null>(null);
+  const [assetPendingDelete, setAssetPendingDelete] = useState<EditorAsset | null>(null);
+  const [assetPendingRename, setAssetPendingRename] = useState<EditorAsset | null>(null);
+  const [renameFilename, setRenameFilename] = useState('');
+  const [renameError, setRenameError] = useState('');
+  const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [draggedBlock, setDraggedBlock] = useState<BlockSelection | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   // The last draft the server confirmed, and the server revision it was stored under. Each save
@@ -247,6 +258,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const skipSelectionScroll = useRef(false);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const imagePickerFileInputRef = useRef<HTMLInputElement | null>(null);
   const sectionsPanelRef = useRef<HTMLDivElement | null>(null);
 
   function commitDocument(nextDocument: SiteDocument) {
@@ -422,7 +434,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   }
 
   async function uploadImage(file: File | null, targetPath: (string | number)[] = ['imageAssetId']) {
-    if (!file || !editorData) return;
+    if (!file || !editorData) return false;
     setUploadingImage(true);
     setUploadError('');
     try {
@@ -434,16 +446,127 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         body: form,
       });
       const result = await response.json().catch(() => ({})) as {
-        asset?: { id: string };
+        asset?: EditorAsset;
         message?: string;
       };
       if (!response.ok) throw new Error(result.message ?? 'No se pudo subir la imagen.');
       if (!result.asset?.id) throw new Error('La subida no devolvió un identificador de imagen.');
+      setProjectAssets((current) => [result.asset!, ...current.filter((asset) => asset.id !== result.asset!.id)]);
       updateNestedProperty(targetPath, result.asset.id);
+      return true;
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'No se pudo subir la imagen.');
+      return false;
     } finally {
       setUploadingImage(false);
+    }
+  }
+
+  async function uploadImages(files: File[], targetPath: (string | number)[] = ['imageAssetId']) {
+    if (files.length === 0 || !editorData?.project.canEdit) return false;
+    setUploadingImage(true);
+    setUploadError('');
+    try {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      const uploadedAssets: EditorAsset[] = [];
+      const failures: string[] = [];
+
+      for (const file of files) {
+        if (!allowedTypes.includes(file.type)) {
+          failures.push(`${file.name}: tipo de imagen no permitido.`);
+          continue;
+        }
+
+        try {
+          const form = new FormData();
+          form.set('file', file);
+          const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, {
+            method: 'POST',
+            cache: 'no-store',
+            body: form,
+          });
+          const result = await response.json().catch(() => ({})) as {
+            asset?: EditorAsset;
+            message?: string;
+          };
+          if (!response.ok) throw new Error(result.message ?? 'No se pudo subir la imagen.');
+          if (!result.asset?.id) throw new Error('La subida no devolvió un identificador de imagen.');
+          uploadedAssets.push(result.asset);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'No se pudo subir la imagen.';
+          failures.push(`${file.name}: ${message}`);
+        }
+      }
+
+      if (uploadedAssets.length > 0) {
+        const uploadedIds = new Set(uploadedAssets.map((asset) => asset.id));
+        setProjectAssets((current) => [...uploadedAssets, ...current.filter((asset) => !uploadedIds.has(asset.id))]);
+        updateNestedProperty(targetPath, uploadedAssets[uploadedAssets.length - 1].id);
+      }
+
+      if (failures.length > 0) setUploadError(failures.join(' '));
+      return uploadedAssets.length === files.length && failures.length === 0;
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  async function renameImage(asset: EditorAsset) {
+    if (!editorData?.project.canEdit) return false;
+    setRenamingAssetId(asset.id);
+    setRenameError('');
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(asset.id)}`, {
+        method: 'PATCH',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: renameFilename }),
+      });
+      const result = await response.json().catch(() => ({})) as { asset?: EditorAsset; message?: string };
+      if (!response.ok) throw new Error(result.message ?? 'No se pudo renombrar la imagen.');
+      if (!result.asset) throw new Error('La respuesta no incluyó la imagen renombrada.');
+      setProjectAssets((current) => current.map((candidate) => candidate.id === asset.id ? result.asset! : candidate));
+      setAssetPendingRename(null);
+      return true;
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : 'No se pudo renombrar la imagen.');
+      return false;
+    } finally {
+      setRenamingAssetId(null);
+    }
+  }
+
+  async function deleteImage(asset: EditorAsset) {
+    if (!editorData?.project.canEdit) return false;
+    setDeletingAssetId(asset.id);
+    setUploadError('');
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(asset.id)}`, {
+        method: 'DELETE',
+        cache: 'no-store',
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; message?: string; draftDocument?: SiteDocument; draftRevision?: number };
+      if (!response.ok) {
+        const message = result.error === 'asset_in_use' || response.status === 409
+          ? result.message ?? 'La imagen sigue en uso. Quita sus referencias de los bloques y publica una versión actualizada antes de eliminarla.'
+          : result.message ?? 'No se pudo eliminar la imagen.';
+        throw new Error(message);
+      }
+      setProjectAssets((current) => current.filter((candidate) => candidate.id !== asset.id));
+      if (result.draftDocument) {
+        setEditorData((current) => current ? { ...current, draftDocument: result.draftDocument! } : current);
+        latestDraft.current = result.draftDocument;
+        lastSavedDraft.current = JSON.stringify(result.draftDocument);
+        if (typeof result.draftRevision === 'number') serverDraftRevision.current = result.draftRevision;
+        setHistory({ past: [], future: [] });
+        syncSelectedProperties(result.draftDocument);
+      }
+      return true;
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'No se pudo eliminar la imagen.');
+      return false;
+    } finally {
+      setDeletingAssetId(null);
     }
   }
 
@@ -576,17 +699,33 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       }
       if (key === 'imageAssetId') {
         const canEditImage = editorData?.project.canEdit ?? false;
+        const selectedAsset = projectAssets.find((asset) => asset.id === value);
         return (
           <Stack key={path.join('.')} gap="xs">
-            <TextInput
-              label={label}
-              description="Identificador generado automáticamente"
-              placeholder="Sin imagen seleccionada"
-              maxLength={maxLength}
-              readOnly
-              value={value}
-              error={error}
-            />
+            {projectAssets.length > 0 && (
+              <Stack gap={6}>
+                <Text size="sm" fw={500}>Imagen</Text>
+                {selectedAsset ? (
+                  <Card withBorder padding="xs" radius="md">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      {/* This image is served through the app's private asset route, so keep its URL unoptimized. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/api/assets/${encodeURIComponent(selectedAsset.id)}`} alt="" width={56} height={42}
+                        style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                      <Text size="sm" title={selectedAsset.filename} lineClamp={1} style={{ minWidth: 0, flex: 1 }}>
+                        {selectedAsset.filename}
+                      </Text>
+                    </div>
+                  </Card>
+                ) : (
+                  <Text size="sm" c="dimmed">Sin imagen seleccionada</Text>
+                )}
+                <Button type="button" variant="default" disabled={!canEditImage || uploadingImage}
+                  onClick={() => setImagePickerTargetPath(path)}>
+                  {selectedAsset ? 'Cambiar imagen' : 'Elegir imagen'}
+                </Button>
+              </Stack>
+            )}
             <input
               ref={imageFileInputRef}
               type="file"
@@ -598,27 +737,31 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
                 void uploadImage(file, path);
               }}
             />
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, width: '100%' }}>
               <Button
                 type="button"
                 variant="light"
                 disabled={!canEditImage || uploadingImage}
-                leftSection={uploadingImage ? <Loader size="xs" /> : undefined}
+                aria-label={uploadingImage ? 'Subiendo imagen' : 'Subir imagen'}
+                title={uploadingImage ? 'Subiendo imagen' : 'Subir imagen'}
                 onClick={() => imageFileInputRef.current?.click()}
-              >
-                {uploadingImage ? 'Subiendo…' : value ? 'Cambiar imagen' : 'Subir imagen'}
+                style={{ flex: 1 }}
+              >{uploadingImage ? <Loader size="xs" /> : <Upload size={16} aria-hidden="true" />}
               </Button>
               <Button
                 type="button"
                 variant="subtle"
                 color="red"
+                aria-label="Quitar imagen"
+                title="Quitar imagen"
                 disabled={!canEditImage || uploadingImage || !value}
+                style={{ flex: 1 }}
                 onClick={() => {
                   setUploadError('');
                   updateNestedProperty(path, '');
                 }}
               >
-                Quitar imagen
+                <ImageMinus size={16} aria-hidden="true" />
               </Button>
             </div>
             {uploadError ? <Alert color="red" variant="light">{uploadError}</Alert> : null}
@@ -679,9 +822,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         <TextInput
           key={path.join('.')}
           label={label}
-          description={key === 'imageAssetId'
-            ? 'Identificador de la imagen asociada al bloque'
-            : maxLength ? `${characterCount} caracteres` : undefined}
+          description={maxLength ? `${characterCount} caracteres` : undefined}
           placeholder={key === 'ctaUrl' || key === 'url' ? 'https://ejemplo.com' : undefined}
           maxLength={maxLength}
           disabled={!editorData?.project.canEdit}
@@ -1015,6 +1156,13 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
   useEffect(() => {
     const controller = new AbortController();
 
+    fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as { assets?: EditorAsset[] };
+        if (response.ok && !controller.signal.aborted) setProjectAssets(result.assets ?? []);
+      })
+      .catch(() => {});
+
     fetchInitialDraft.current(controller.signal)
       .then((result) => applyInitialDraft.current(result, false))
       .catch((error: unknown) => {
@@ -1047,7 +1195,20 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               </Badge>
             )}
           </div>
-          <Button component="a" href="/app/projects" variant="default">
+          {editorData && (
+            <div className={styles.editorToolbar}>
+              <Button size="xs" variant="default" aria-label="Deshacer" disabled={!editorData.project.canEdit || history.past.length === 0} onClick={undoDocumentChange}><Undo2 size={14} aria-hidden="true" /></Button>
+              <Button size="xs" variant="default" aria-label="Rehacer" disabled={!editorData.project.canEdit || history.future.length === 0} onClick={redoDocumentChange}><Redo2 size={14} aria-hidden="true" /></Button>
+              <Button.Group aria-label="Tamaño de vista previa">
+                <Button size="xs" variant={previewMode === 'desktop' ? 'filled' : 'default'} aria-pressed={previewMode === 'desktop'} aria-label="Vista de escritorio" onClick={() => setPreviewMode('desktop')}><Monitor size={14} aria-hidden="true" /> Escritorio</Button>
+                <Button size="xs" variant={previewMode === 'mobile' ? 'filled' : 'default'} aria-pressed={previewMode === 'mobile'} aria-label="Vista móvil" onClick={() => setPreviewMode('mobile')}><Smartphone size={14} aria-hidden="true" /> Móvil</Button>
+              </Button.Group>
+              <Button size="xs" variant="default" aria-label={sectionsPanelVisible ? 'Ocultar panel lateral' : 'Mostrar panel lateral'} aria-pressed={!sectionsPanelVisible} onClick={() => setSectionsPanelVisible((visible) => !visible)}>
+                {sectionsPanelVisible ? 'Ocultar panel' : 'Mostrar panel'}
+              </Button>
+            </div>
+          )}
+          <Button component="a" href="/app/projects" size="xs" variant="default">
             Volver a proyectos
           </Button>
         </header>
@@ -1105,56 +1266,35 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         ) : editorData ? (
           <div className={`${styles.workspace} ${sectionsPanelVisible ? '' : styles.workspaceCollapsed}`}>
             <section aria-label="Canvas del sitio" className={styles.canvasPanel}>
-              <Card withBorder radius="lg" padding="sm" className={styles.canvasSurface}>
-                <Stack gap="md" className={styles.canvasStack}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Title order={2} className={styles.panelHeading}>Vista de página</Title>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button.Group aria-label="Tamaño de vista previa">
-                        <Button variant={previewMode === 'desktop' ? 'filled' : 'default'} aria-pressed={previewMode === 'desktop'} aria-label="Vista de escritorio" onClick={() => setPreviewMode('desktop')}><Monitor size={16} aria-hidden="true" /> Escritorio</Button>
-                        <Button variant={previewMode === 'mobile' ? 'filled' : 'default'} aria-pressed={previewMode === 'mobile'} aria-label="Vista móvil" onClick={() => setPreviewMode('mobile')}><Smartphone size={16} aria-hidden="true" /> Móvil</Button>
-                      </Button.Group>
-                      <Button variant="default" aria-label={sectionsPanelVisible ? 'Ocultar panel lateral' : 'Mostrar panel lateral'} aria-pressed={!sectionsPanelVisible} onClick={() => setSectionsPanelVisible((visible) => !visible)}>
-                        {sectionsPanelVisible ? 'Ocultar panel' : 'Mostrar panel'}
-                      </Button>
-                      <Button variant="default" aria-label="Deshacer" disabled={!editorData.project.canEdit || history.past.length === 0} onClick={undoDocumentChange}><Undo2 size={16} aria-hidden="true" /></Button>
-                      <Button variant="default" aria-label="Rehacer" disabled={!editorData.project.canEdit || history.future.length === 0} onClick={redoDocumentChange}><Redo2 size={16} aria-hidden="true" /></Button>
-                      <Badge variant="light" color={editorData.project.canEdit ? 'indigo' : 'gray'}>
-                        {editorData.project.canEdit ? 'Editable' : 'Solo lectura'}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div ref={canvasViewportRef} data-editor-command-scope="canvas" className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
-                    {editorData.draftDocument.pages.map((page) => (
-                      <article key={page.id} className={styles.pageCanvas} data-preview={previewMode} aria-label={`Página ${page.path}`}>
-                        {page.blocks.map((block, blockIndex) => (
-                          <Fragment key={block.id}>
-                          {dropPlaceholder(page.id, block.id, 'before')}
-                          <CanvasBlock
-                            block={block}
-                            blockIndex={blockIndex}
-                            pageId={page.id}
-                            theme={editorData.draftDocument.site.theme}
-                            selected={isSelected(selection, page.id, block.id)}
-                            onSelect={selectBlock}
-                            registerFrame={registerCanvasBlock}
-                            draggable={editorData.project.canEdit}
-                            onDragStart={() => { dragTargetBounds.current.clear(); setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
-                            onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
-                            onDragOver={handleBlockDragOver}
-                            onDrop={dropBlock}
-                            onMove={(blockSelection, targetIndex) => reorderBlock(blockSelection.pageId, blockSelection.blockId, targetIndex)}
-                            onRequestDelete={(blockSelection) => requestDeleteBlock(blockSelection.pageId, blockSelection.blockId)}
-                            onDuplicate={(blockSelection) => duplicateBlock(blockSelection.pageId, blockSelection.blockId)}
-                          />
-                          {dropPlaceholder(page.id, block.id, 'after')}
-                          </Fragment>
-                        ))}
-                      </article>
+              <div ref={canvasViewportRef} data-editor-command-scope="canvas" className={`${styles.canvasViewport} ${previewMode === 'mobile' ? styles.mobilePreview : ''}`}>
+                {editorData.draftDocument.pages.map((page) => (
+                  <article key={page.id} className={styles.pageCanvas} data-preview={previewMode} aria-label={`Página ${page.path}`}>
+                    {page.blocks.map((block, blockIndex) => (
+                      <Fragment key={block.id}>
+                      {dropPlaceholder(page.id, block.id, 'before')}
+                      <CanvasBlock
+                        block={block}
+                        blockIndex={blockIndex}
+                        pageId={page.id}
+                        theme={editorData.draftDocument.site.theme}
+                        selected={isSelected(selection, page.id, block.id)}
+                        onSelect={selectBlock}
+                        registerFrame={registerCanvasBlock}
+                        draggable={editorData.project.canEdit}
+                        onDragStart={() => { dragTargetBounds.current.clear(); setDraggedBlock({ pageId: page.id, blockId: block.id }); setDropTarget(null); }}
+                        onDragEnd={() => { dragTargetBounds.current.clear(); setDraggedBlock(null); setDropTarget(null); }}
+                        onDragOver={handleBlockDragOver}
+                        onDrop={dropBlock}
+                        onMove={(blockSelection, targetIndex) => reorderBlock(blockSelection.pageId, blockSelection.blockId, targetIndex)}
+                        onRequestDelete={(blockSelection) => requestDeleteBlock(blockSelection.pageId, blockSelection.blockId)}
+                        onDuplicate={(blockSelection) => duplicateBlock(blockSelection.pageId, blockSelection.blockId)}
+                      />
+                      {dropPlaceholder(page.id, block.id, 'after')}
+                      </Fragment>
                     ))}
-                  </div>
-                </Stack>
-              </Card>
+                  </article>
+                ))}
+              </div>
             </section>
 
             {sectionsPanelVisible && <aside aria-label="Lista de secciones" className={styles.sectionsColumn}>
@@ -1336,6 +1476,124 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
         </Stack>
       </Modal>
       <Modal
+        opened={imagePickerTargetPath !== null}
+        onClose={() => setImagePickerTargetPath(null)}
+        title="Elegir imagen del proyecto"
+        centered
+        size="lg"
+      >
+        <Stack gap="md">
+          <input
+            ref={imagePickerFileInputRef}
+            type="file"
+            hidden
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? []);
+              event.currentTarget.value = '';
+              void uploadImages(files, imagePickerTargetPath ?? ['imageAssetId']).then((uploaded) => {
+                if (uploaded) setImagePickerTargetPath(null);
+              });
+            }}
+            multiple
+          />
+          <Card
+            withBorder
+            padding="md"
+            radius="md"
+            role="region"
+            aria-label="Zona para soltar imágenes"
+            onDragEnter={(event) => {
+              event.preventDefault();
+              if (!uploadingImage && editorData?.project.canEdit) setImageDragActive(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'copy';
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+                setImageDragActive(false);
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setImageDragActive(false);
+              if (uploadingImage || !editorData?.project.canEdit) return;
+              const files = Array.from(event.dataTransfer.files);
+              void uploadImages(files, imagePickerTargetPath ?? ['imageAssetId']).then((uploaded) => {
+                if (uploaded) setImagePickerTargetPath(null);
+              });
+            }}
+            style={{
+              borderStyle: 'dashed',
+              borderColor: imageDragActive ? 'var(--mantine-color-indigo-6)' : 'var(--mantine-color-gray-4)',
+              backgroundColor: imageDragActive ? 'var(--mantine-color-indigo-0)' : undefined,
+              textAlign: 'center',
+            }}
+          >
+            <Stack align="center" gap="xs">
+              <Text size="sm" fw={500}>Arrastra una o varias imágenes aquí para subirlas</Text>
+              <Text size="xs" c="dimmed">JPEG, PNG o WebP.</Text>
+              <Button type="button" variant="light"
+                leftSection={uploadingImage ? <Loader size="xs" /> : <Upload size={16} />}
+                disabled={!editorData?.project.canEdit || uploadingImage}
+                onClick={() => imagePickerFileInputRef.current?.click()}>
+                {uploadingImage ? 'Subiendo imágenes…' : 'Elegir archivos'}
+              </Button>
+            </Stack>
+          </Card>
+          {uploadError && <Alert color="red" role="alert">{uploadError}</Alert>}
+          {projectAssets.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+            {projectAssets.map((asset) => (
+              <Card key={asset.id} withBorder padding="sm" radius="md">
+                <Stack gap="xs">
+                  <Text size="sm" fw={500} lineClamp={2} title={asset.filename}
+                    style={{ height: 42, overflow: 'hidden' }}>
+                    {asset.filename}
+                  </Text>
+                  <Button type="button" variant="subtle" color="gray" fullWidth
+                    aria-label={`Seleccionar ${asset.filename}`} disabled={!editorData?.project.canEdit}
+                    onClick={() => {
+                      if (imagePickerTargetPath) updateNestedProperty(imagePickerTargetPath, asset.id);
+                      setImagePickerTargetPath(null);
+                    }}
+                    style={{ display: 'block', height: 'auto', padding: 0, whiteSpace: 'normal' }}>
+                    {/* This image is served through the app's private asset route, so keep its URL unoptimized. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/api/assets/${encodeURIComponent(asset.id)}`} alt="" loading="lazy"
+                      style={{ display: 'block', width: '100%', height: 128, objectFit: 'cover', borderRadius: 6 }} />
+                  </Button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                    <Button type="button" variant="subtle" size="xs"
+                      aria-label={`Renombrar ${asset.filename}`} title={`Renombrar ${asset.filename}`}
+                      disabled={!editorData?.project.canEdit || renamingAssetId !== null || deletingAssetId !== null || uploadingImage}
+                      onClick={() => {
+                        setRenameFilename(asset.filename);
+                        setRenameError('');
+                        setAssetPendingRename(asset);
+                      }}>
+                      <Pencil size={15} aria-hidden="true" />
+                    </Button>
+                    <Button type="button" variant="subtle" color="red" size="xs"
+                      aria-label={`Eliminar ${asset.filename}`} title={`Eliminar ${asset.filename}`}
+                      disabled={!editorData?.project.canEdit || deletingAssetId !== null || renamingAssetId !== null || uploadingImage}
+                      onClick={() => setAssetPendingDelete(asset)}>
+                      <Trash2 size={15} aria-hidden="true" />
+                    </Button>
+                  </div>
+                </Stack>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Text size="sm" c="dimmed">No hay imágenes subidas al proyecto.</Text>
+          )}
+        </Stack>
+      </Modal>
+      <Modal
         opened={blockPendingDelete !== null}
         onClose={() => setBlockPendingDelete(null)}
         title="¿Eliminar sección?"
@@ -1350,6 +1608,54 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
               if (blockPendingDelete) deleteBlock(blockPendingDelete.pageId, blockPendingDelete.blockId);
               setBlockPendingDelete(null);
             }}>Eliminar sección</Button>
+          </div>
+        </Stack>
+      </Modal>
+      <Modal
+        opened={assetPendingRename !== null}
+        onClose={() => renamingAssetId === null && setAssetPendingRename(null)}
+        title="Renombrar imagen"
+        centered
+        size="sm"
+      >
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          if (assetPendingRename) void renameImage(assetPendingRename);
+        }}>
+          <Stack gap="md">
+            <TextInput
+              label="Nombre de la imagen"
+              value={renameFilename}
+              maxLength={255}
+              autoFocus
+              disabled={renamingAssetId !== null}
+              error={renameError}
+              onChange={(event) => setRenameFilename(event.currentTarget.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="default" disabled={renamingAssetId !== null} onClick={() => setAssetPendingRename(null)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                loading={renamingAssetId !== null}
+                disabled={!assetPendingRename || !editorData?.project.canEdit || !renameFilename.trim() || renameFilename === assetPendingRename.filename}
+              >
+                Guardar nombre
+              </Button>
+            </div>
+          </Stack>
+        </form>
+      </Modal>
+      <Modal opened={assetPendingDelete !== null} onClose={() => deletingAssetId === null && setAssetPendingDelete(null)} title="¿Eliminar imagen?" centered size="sm">
+        <Stack gap="md">
+          <Text>¿Eliminar “{assetPendingDelete?.filename}” del proyecto? Se quitará de todos los bloques del borrador. Esta acción no se puede deshacer.</Text>
+          {uploadError && <Alert color="red" role="alert">{uploadError}</Alert>}
+          <div className="flex justify-end gap-2">
+            <Button variant="default" disabled={deletingAssetId !== null} onClick={() => setAssetPendingDelete(null)}>Cancelar</Button>
+            <Button color="red" loading={deletingAssetId !== null} disabled={!assetPendingDelete || !editorData?.project.canEdit} onClick={async () => {
+              if (assetPendingDelete && await deleteImage(assetPendingDelete)) setAssetPendingDelete(null);
+            }}>Eliminar imagen</Button>
           </div>
         </Stack>
       </Modal>

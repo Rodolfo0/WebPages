@@ -33,6 +33,16 @@ export class AssetUploadError extends Error {
   }
 }
 
+export class AssetInUseError extends Error {
+  readonly code = 'asset_in_use';
+  readonly status = 409;
+
+  constructor(message = 'La imagen está en uso y no se puede eliminar todavía.') {
+    super(message);
+    this.name = 'AssetInUseError';
+  }
+}
+
 export function validateAssetUpload(file: File) {
   if (!ALLOWED_ASSET_TYPES.includes(file.type as typeof ALLOWED_ASSET_TYPES[number])) {
     throw new AssetInputError('Solo se permiten imágenes JPEG, PNG o WebP.');
@@ -45,6 +55,15 @@ export function validateAssetUpload(file: File) {
   const filename = file.name.normalize('NFKC').trim().slice(0, 255);
   const result = z.string().min(1).safeParse(filename);
   if (!result.success) throw new AssetInputError('El nombre del archivo no es válido.');
+}
+
+export function validateAssetFilename(value: unknown) {
+  if (typeof value !== 'string') throw new AssetInputError('Escribe un nombre para la imagen.');
+  const filename = value.normalize('NFKC').trim();
+  if (!filename) throw new AssetInputError('El nombre de la imagen no puede estar vacío.');
+  if (filename.length > 255) throw new AssetInputError('El nombre de la imagen no puede superar 255 caracteres.');
+  if (/[\u0000-\u001f\u007f]/.test(filename)) throw new AssetInputError('El nombre de la imagen contiene caracteres no válidos.');
+  return filename;
 }
 
 export function assetExtension(contentType: string) {
