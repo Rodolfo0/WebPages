@@ -1,6 +1,6 @@
 import type { AuthUser } from '../../auth';
 import { withAuthUser } from '../../auth/server';
-import { AssetInUseError, AssetInputError, AssetUploadError } from '../domain/asset';
+import { AssetInUseError, AssetInputError, AssetQuotaError, AssetUploadError, MAX_ASSET_MULTIPART_OVERHEAD, MAX_ASSET_SIZE } from '../domain/asset';
 import { deleteProjectAsset, listProjectAssets, renameProjectAsset, uploadProjectAsset } from './manage-assets';
 import { ProjectAccessError } from '../../projects/domain/access';
 import { eq } from 'drizzle-orm';
@@ -32,6 +32,7 @@ function assetErrorResponse(error: unknown) {
   if (error instanceof AssetInUseError || error instanceof AssetInputError || error instanceof AssetUploadError) {
     return json({ error: error.code, message: error.message }, error.status);
   }
+  if (error instanceof AssetQuotaError) return json({ error: error.code, message: error.message }, error.status);
   if (error instanceof ProjectAccessError) {
     return json({ error: error.code, message: error.message }, error.status);
   }
@@ -182,9 +183,54 @@ export function handleUploadAsset(request: Request, bindings: AssetBindings, pro
     try {
       const contentType = request.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
       if (contentType !== 'multipart/form-data') throw new AssetInputError('Envía la imagen como multipart/form-data.');
-      const form = await request.formData();
-      const file = form.get('file');
-      if (!(file instanceof File)) throw new AssetInputError('Selecciona una imagen para subirla.');
+      const maxRequestBytes = MAX_ASSET_SIZE + MAX_ASSET_MULTIPART_OVERHEAD;
+      const declaredLength = request.headers.get('content-length');
+      if (declaredLength && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maxRequestBytes)) {
+        throw new AssetInputError('La solicitud supera el tamaño máximo permitido.', 413);
+      }
+      if (!request.body) throw new AssetInputError('Selecciona una imagen para subirla.');
+
+      const reader = request.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let byteLength = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          byteLength += value.byteLength;
+          if (byteLength > maxRequestBytes) {
+            void reader.cancel().catch(() => undefined);
+            throw new AssetInputError('La solicitud supera el tamaño máximo permitido.', 413);
+          }
+          chunks.push(value);
+        }
+      } catch (error) {
+        void reader.cancel().catch(() => undefined);
+        if (error instanceof AssetInputError) throw error;
+        throw new AssetInputError('No se pudo leer la imagen enviada.');
+      } finally {
+        reader.releaseLock();
+      }
+
+      const body = new Uint8Array(byteLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        body.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      const headers = new Headers(request.headers);
+      headers.delete('content-length');
+      let form: FormData;
+      try {
+        form = await new Request(request.url, { method: 'POST', headers, body }).formData();
+      } catch {
+        throw new AssetInputError('El formulario de imagen no es válido.');
+      }
+      const fields = [...form.entries()];
+      if (fields.length !== 1 || fields[0][0] !== 'file' || !(fields[0][1] instanceof File)) {
+        throw new AssetInputError('Envía un solo archivo de imagen en el campo file.');
+      }
+      const file = fields[0][1];
       const asset = await uploadProjectAsset(bindings.DB!, bindings.FILES, user, projectId, file);
       return json({ asset }, 201);
     } catch (error) {

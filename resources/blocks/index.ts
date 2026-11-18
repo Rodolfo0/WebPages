@@ -1,5 +1,6 @@
 export type { AnyBlockDefinition, BlockDefinition, BlockPropsOf } from './domain/block-definition';
 export { defineBlock } from './domain/block-definition';
+export { findMissingContentImageAltPaths, populateMissingContentImageAlt } from './domain/content-image-alt';
 export type { BlockRegistry } from './domain/block-registry';
 export {
   createBlockRegistry,

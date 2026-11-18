@@ -86,7 +86,7 @@ D1_DATABASE_ID=00000000-0000-4000-8000-000000000000 pnpm build
 pnpm exec wrangler d1 migrations apply site-creator-d1 --local --config dist/server/wrangler.json
 ```
 
-El UUID del comando es el identificador local predeterminado de `vite.config.ts`. La migración inicial crea `users` y el esquema base; la siguiente agrega referencias de assets a las versiones publicadas.
+El UUID del comando es el identificador local predeterminado de `vite.config.ts`. Las migraciones crean el esquema base, agregan referencias de assets a las versiones publicadas y registran quién sube cada imagen para aplicar las cuotas de cuenta.
 
 ### Usar una D1 remota en desarrollo (opcional)
 

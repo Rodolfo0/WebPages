@@ -22,7 +22,7 @@ import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react
 import type { KeyboardEvent } from 'react';
 import { ArrowDown, ArrowUp, Copy, ImageMinus, Monitor, Pencil, Redo2, Smartphone, Trash2, Undo2, Upload } from 'lucide-react';
 import { create, type Delta } from 'jsondiffpatch';
-import { portfolioBlockRegistry, requireBlock } from '../../blocks';
+import { findMissingContentImageAltPaths, portfolioBlockRegistry, requireBlock } from '../../blocks';
 import type { BlockProps, JsonValue, SiteDocument } from '../../site-document';
 import {
   addBlockToDocument,
@@ -469,6 +469,12 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
     setPropertyDraft(nextDraft);
     if (!editorData || !selection || !selectedBlock) return;
 
+    const missingImageAltPaths = findMissingContentImageAltPaths(nextDraft);
+    if (missingImageAltPaths.length > 0) {
+      setPropertyErrors(Object.fromEntries(missingImageAltPaths.map((path) => [path.map(String).join('.'), 'Añade texto alternativo para esta imagen.'])));
+      return;
+    }
+
     try {
       const nextDocument = updateBlockProps(
         editorData.draftDocument,
@@ -749,7 +755,22 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
 
   function renderPropertyEditor(key: string, value: JsonValue, path: (string | number)[]) {
     const exactPath = path.join('.');
-    const error = propertyErrors[exactPath] ?? propertyErrors[String(path[0] ?? key)];
+    let imageOwner: unknown = propertyDraft;
+    for (const segment of path.slice(0, -1)) {
+      imageOwner = imageOwner && typeof imageOwner === 'object'
+        ? (imageOwner as Record<string | number, unknown>)[segment]
+        : undefined;
+    }
+    const imageAltRequired = key === 'imageAlt'
+      && imageOwner !== null
+      && typeof imageOwner === 'object'
+      && typeof (imageOwner as Record<string, unknown>).imageAssetId === 'string'
+      && ((imageOwner as Record<string, string>).imageAssetId.trim().length > 0);
+    const missingImageAlt = key === 'imageAlt'
+      && findMissingContentImageAltPaths(propertyDraft).some((missingPath) => missingPath.map(String).join('.') === exactPath);
+    const error = propertyErrors[exactPath]
+      ?? propertyErrors[String(path[0] ?? key)]
+      ?? (missingImageAlt ? 'Añade texto alternativo para esta imagen.' : undefined);
     const label = humanizeProperty(key);
     const maxLength = maxLengthForProperty(key);
     const characterCount = typeof value === 'string'
@@ -931,6 +952,7 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
           placeholder={key === 'ctaUrl' || key === 'url' ? 'https://ejemplo.com' : undefined}
           maxLength={maxLength}
           disabled={!editorData?.project.canEdit}
+          required={imageAltRequired}
           value={value}
           error={error}
           onChange={(event) => updateNestedProperty(path, event.currentTarget.value)}
