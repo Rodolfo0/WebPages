@@ -218,6 +218,8 @@ export const assets = sqliteTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    uploadedByUserId: text('uploaded_by_user_id')
+      .references(() => users.id, { onDelete: 'restrict' }),
     r2Key: text('r2_key').notNull(),
     filename: text('filename').notNull(),
     contentType: text('content_type').notNull(),
@@ -229,6 +231,7 @@ export const assets = sqliteTable(
     check('assets_byte_size_positive', sql`${table.byteSize} > 0`),
     uniqueIndex('assets_r2_key_uidx').on(table.r2Key),
     index('assets_project_created_at_idx').on(table.projectId, table.createdAt),
+    index('assets_uploaded_by_user_id_idx').on(table.uploadedByUserId),
   ],
 );
 

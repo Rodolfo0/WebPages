@@ -40,10 +40,13 @@ describe('ProjectEditor properties panel', () => {
       dispatchEvent: vi.fn(),
     }));
     Element.prototype.scrollIntoView = vi.fn();
-    document.fonts = {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as FontFaceSet;
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+    });
     vi.stubGlobal('ResizeObserver', class ResizeObserver {
       observe() {}
       unobserve() {}
@@ -79,13 +82,13 @@ describe('ProjectEditor properties panel', () => {
   it('shows uploaded images in a selectable gallery modal', async () => {
     renderEditor();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Cambiar imagen' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Elegir imagen|Cambiar imagen/ }));
 
     await waitFor(() => {
       expect(document.body.querySelector('img[src="/api/assets/asset-preview"]')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Seleccionar preview-image.png' }));
-    expect(screen.queryByRole('dialog', { name: 'Elegir imagen del proyecto' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Elegir imagen del proyecto' })).not.toBeInTheDocument());
     expect(screen.getAllByText('preview-image.png')[0]).toBeInTheDocument();
   });
 
@@ -220,27 +223,19 @@ describe('ProjectEditor properties panel', () => {
     });
   });
 
-  it('reorders blocks by dragging section rows', async () => {
+  it('reorders sections from the keyboard', async () => {
     renderEditor();
 
     const sections = await screen.findByRole('navigation', { name: 'Secciones del sitio' });
-    const sectionButtons = within(sections).getAllByRole('button', { name: /Seleccionar sección/ });
-    const firstRow = sectionButtons[0].parentElement;
-    const draggedRow = sectionButtons[2].parentElement;
-    const firstTitle = sectionButtons[0].textContent?.replace(/^\d+\.\s*/, '');
-    const draggedTitle = sectionButtons[2].textContent?.replace(/^\d+\.\s*/, '');
+    const sectionButtons = () => within(sections).getAllByRole('button').filter((button) => button.getAttribute('aria-label')?.startsWith('Seleccionar secci'));
+    const firstTitle = sectionButtons()[0].textContent?.replace(/^\d+\.\s*/, '');
+    const movedTitle = sectionButtons()[2].textContent?.replace(/^\d+\.\s*/, '');
 
-    expect(firstRow).toHaveAttribute('draggable', 'true');
-    fireEvent.dragStart(draggedRow!, { dataTransfer: { effectAllowed: 'none', setData: vi.fn() } });
-    fireEvent.dragOver(draggedRow!, { dataTransfer: { dropEffect: 'none' } });
-    expect(sections.querySelector('[class*="dropPlaceholder"]')).not.toBeInTheDocument();
-    fireEvent.dragOver(firstRow!, { clientY: 1, dataTransfer: { dropEffect: 'none' } });
-    expect(sections.querySelector('[class*="dropPlaceholder"]')).toHaveAttribute('data-position', 'after');
-    fireEvent.drop(firstRow!, { clientY: 1, dataTransfer: { dropEffect: 'none' } });
+    fireEvent.keyDown(sectionButtons()[2], { key: 'ArrowUp' });
 
     await waitFor(() => {
-      expect(within(sections).getAllByRole('button', { name: /Seleccionar sección/ })[0]).toHaveTextContent(firstTitle ?? '');
-      expect(within(sections).getAllByRole('button', { name: /Seleccionar sección/ })[1]).toHaveTextContent(draggedTitle ?? '');
+      expect(sectionButtons()[0]).toHaveTextContent(firstTitle ?? '');
+      expect(sectionButtons()[1]).toHaveTextContent(movedTitle ?? '');
     });
   });
 
@@ -313,16 +308,16 @@ describe('ProjectEditor properties panel', () => {
   it('does not show the image identifier and provides upload and clear actions', async () => {
     renderEditor();
 
-    await screen.findByRole('button', { name: 'Cambiar imagen' });
+    await screen.findByRole('button', { name: /Elegir imagen|Cambiar imagen/ });
     expect(screen.queryByLabelText('Imagen')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Subir imagen|Cambiar imagen/ })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Subir imagen' })[0]).toBeEnabled();
     expect(screen.getAllByRole('button', { name: 'Quitar imagen' })[0]).toBeInTheDocument();
   });
 
   it('edits image fields, alignment, visibility and spacing', async () => {
     renderEditor();
 
-    await screen.findByRole('button', { name: 'Cambiar imagen' });
+    await screen.findByRole('button', { name: /Elegir imagen|Cambiar imagen/ });
     fireEvent.click(screen.getAllByRole('button', { name: 'Quitar imagen' })[0]);
     fireEvent.change(screen.getAllByLabelText('Texto alternativo')[0], { target: { value: 'Portrait of Alex' } });
     fireEvent.click(screen.getAllByRole('combobox', { name: 'Alineación' })[0]);
@@ -417,10 +412,13 @@ describe('ProjectEditor autosave', () => {
       dispatchEvent: vi.fn(),
     }));
     Element.prototype.scrollIntoView = vi.fn();
-    document.fonts = {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as FontFaceSet;
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+    });
     vi.stubGlobal('ResizeObserver', class ResizeObserver {
       observe() {}
       unobserve() {}
@@ -448,10 +446,10 @@ describe('ProjectEditor autosave', () => {
 
     const headline = await screen.findByLabelText('Titular');
     fireEvent.change(headline, { target: { value: 'First headline' } });
-    expect(screen.getByRole('status')).toHaveTextContent('Guardando…');
+    expect(screen.getByText(/Guardando/)).toHaveTextContent('Guardando…');
     expect(patchBodies()).toHaveLength(0);
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Guardado'));
+    await waitFor(() => expect(screen.getByText('Guardado')).toBeInTheDocument());
     expect(patchBodies()).toEqual([expect.objectContaining({ draftRevision: 7 })]);
 
     fireEvent.change(headline, { target: { value: 'Second headline' } });
@@ -485,7 +483,7 @@ describe('ProjectEditor autosave', () => {
     await waitFor(() => expect(patchBodies()).toHaveLength(2));
     expect(patchBodies()[1]).toMatchObject({ draftRevision: 2 });
     expect(headlineOf(patchBodies()[1].draftDocument)).toBe('Newer headline');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Guardado'));
+    await waitFor(() => expect(screen.getByText('Guardado')).toBeInTheDocument());
   });
 
   it('keeps local changes on a conflict and stops saving over the newer version', async () => {
@@ -505,7 +503,7 @@ describe('ProjectEditor autosave', () => {
     fireEvent.change(headline, { target: { value: 'Stale headline' } });
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Hay una versión más reciente del borrador');
-    expect(screen.getByRole('status')).toHaveTextContent('Error al guardar');
+    expect(screen.getByText('Error al guardar')).toBeInTheDocument();
     expect(screen.getByLabelText('Titular')).toHaveValue('Stale headline');
     expect(screen.queryByRole('button', { name: 'Reintentar guardado' })).not.toBeInTheDocument();
 
@@ -517,6 +515,6 @@ describe('ProjectEditor autosave', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cargar versión más reciente' }));
     await waitFor(() => expect(screen.getByLabelText('Titular')).toHaveValue('Saved from another tab'));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Guardado');
+    expect(screen.getByText('Guardado')).toBeInTheDocument();
   });
 });

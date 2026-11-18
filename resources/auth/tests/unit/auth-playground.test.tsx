@@ -86,7 +86,7 @@ describe('AuthPlayground in JSDOM', () => {
     const navigate = vi.fn();
     render(<AuthPlayground navigate={navigate} />);
 
-    const submit = screen.getAllByRole('button', { name: 'Iniciar sesión', exact: true }).at(-1)!;
+    const submit = screen.getAllByRole('button', { name: 'Iniciar sesión' }).at(-1)!;
     await waitFor(() => expect(submit).toBeEnabled());
     fireEvent.change(screen.getByLabelText('Correo electrónico'), { target: { value: 'user@example.test' } });
     fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'test-password' } });

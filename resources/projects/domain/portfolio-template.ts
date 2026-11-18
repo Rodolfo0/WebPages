@@ -1,8 +1,9 @@
-import { portfolioBlockRegistry, requireBlock } from '../../blocks';
+import { portfolioBlockRegistry, requireBlock, toBlockSchemaRegistry } from '../../blocks';
 import {
+  createSiteDocumentSchema,
   DEFAULT_THEME_TOKENS,
   type JsonValue,
-  type SiteDocumentInput,
+  type SiteDocument,
 } from '../../site-document';
 
 /**
@@ -52,12 +53,11 @@ const PORTFOLIO_PROPS: Record<PortfolioBlockType, Record<string, JsonValue>> = {
  * a type that is not registered. That guarantees the emitted document can pass
  * `createSiteDocumentSchema`, instead of referencing types the registry never defined.
  *
- * Props are merged over each block's `defaultProps` here, so the draft is complete rather than an
- * empty object waiting to be filled during validation. A complete draft can be rendered by the
- * editor without a validation round-trip, and it diffs predictably if the catalog changes.
+ * Props are merged over each block's `defaultProps` here, then parsed through the canonical schema
+ * so callers receive the validated output type with all schema defaults applied.
  */
-export function createPortfolioTemplate(name: string, slug: string): SiteDocumentInput {
-  return {
+export function createPortfolioTemplate(name: string, slug: string): SiteDocument {
+  return createSiteDocumentSchema(toBlockSchemaRegistry(portfolioBlockRegistry)).parse({
     version: 1,
     site: {
       title: name,
@@ -80,6 +80,6 @@ export function createPortfolioTemplate(name: string, slug: string): SiteDocumen
         }),
       },
     ],
-  };
+  });
 }
 

@@ -5,9 +5,10 @@ import {
   projectRolePermissions,
   projectRoles,
   projects,
+  assets,
   users,
 } from '../../../database/d1/schema';
-import { portfolioBlockRegistry, toBlockSchemaRegistry } from '../../blocks';
+import { findMissingContentImageAltPaths, populateMissingContentImageAlt, portfolioBlockRegistry, toBlockSchemaRegistry } from '../../blocks';
 import type { AuthUser } from '../../auth';
 import { createSiteDocumentSchema } from '../../site-document';
 import { projectAccessDenied, ProjectAccessError } from '../domain/access';
@@ -148,6 +149,15 @@ export async function getProjectDraft(
 
     if (!row) throw projectAccessDenied();
 
+    const rawDraft = JSON.parse(row.draftDocumentJson) as unknown;
+    const missingAltPaths = findMissingContentImageAltPaths(rawDraft);
+    const draftDocument = missingAltPaths.length > 0
+      ? populateMissingContentImageAlt(rawDraft, new Map((await db.select({ id: assets.id, filename: assets.filename })
+        .from(assets)
+        .where(eq(assets.projectId, projectId)))
+        .map((asset) => [asset.id, asset.filename])))
+      : rawDraft;
+
     return {
       project: {
         id: row.id,
@@ -158,7 +168,7 @@ export async function getProjectDraft(
         draftRevision: row.draftRevision,
         canEdit: row.canEdit === 1,
       },
-      draftDocument: projectDocumentSchema.parse(JSON.parse(row.draftDocumentJson) as unknown),
+      draftDocument: projectDocumentSchema.parse(draftDocument),
     };
   } catch (error) {
     if (error instanceof ProjectAccessError) throw error;
@@ -179,6 +189,10 @@ export async function updateProject(
     let validatedDraft;
     let baseDraftRevision: number | undefined;
     if (details.draftDocument !== undefined) {
+      const missingImageAltPaths = findMissingContentImageAltPaths(details.draftDocument);
+      if (missingImageAltPaths.length > 0) {
+        throw new ProjectInputError('Cada imagen de contenido debe tener texto alternativo antes de guardar el borrador.');
+      }
       const parsedDraft = projectDocumentSchema.safeParse(details.draftDocument);
       if (!parsedDraft.success) {
         throw new ProjectInputError(parsedDraft.error.issues[0]?.message ?? 'El borrador contiene valores inválidos.');

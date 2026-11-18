@@ -32,6 +32,10 @@ export const aboutPropsSchema = z.strictObject({
   accentColor: optionalAccentColorSchema,
   hidden: hiddenSchema,
   anchor: anchorSchema,
+}).superRefine((props, context) => {
+  if (props.imageAssetId && !props.imageAlt.trim()) {
+    context.addIssue({ code: 'custom', path: ['imageAlt'], message: 'Añade texto alternativo para esta imagen.' });
+  }
 });
 
 export type AboutProps = z.output<typeof aboutPropsSchema>;

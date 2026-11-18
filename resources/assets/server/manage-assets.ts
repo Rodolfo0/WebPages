@@ -4,10 +4,22 @@ import { projects } from '../../../database/d1/schema';
 import { createDb } from '../../../database/d1/client';
 import type { AuthUser } from '../../auth';
 import { requireProjectPermission } from '../../projects/server/access';
-import { portfolioBlockRegistry, toBlockSchemaRegistry } from '../../blocks';
+import { findMissingContentImageAltPaths, populateMissingContentImageAlt, portfolioBlockRegistry, toBlockSchemaRegistry } from '../../blocks';
 import { collectSiteDocumentAssetIds } from '../../site-document';
 import type { SiteDocument } from '../../site-document';
-import { assetObjectKey, AssetUploadError, type AssetRecord, validateAssetFilename, validateAssetUpload } from '../domain/asset';
+import {
+  assetObjectKey,
+  AssetQuotaError,
+  AssetUploadError,
+  MAX_ASSET_BYTES_PER_PROJECT,
+  MAX_ASSET_BYTES_PER_USER,
+  MAX_ASSETS_PER_PROJECT,
+  MAX_ASSETS_PER_USER,
+  type AssetRecord,
+  validateAssetFilename,
+  validateAssetImageDimensions,
+  validateAssetUpload,
+} from '../domain/asset';
 
 export async function listProjectAssets(database: D1Database, files: R2Bucket | undefined, authUser: AuthUser, projectId: string) {
   await requireProjectPermission(database, authUser, projectId, 'assets:read');
@@ -26,13 +38,48 @@ export async function listProjectAssets(database: D1Database, files: R2Bucket | 
 }
 
 export async function uploadProjectAsset(database: D1Database, files: R2Bucket | undefined, authUser: AuthUser, projectId: string, file: File) {
-  await requireProjectPermission(database, authUser, projectId, 'assets:manage');
+  const access = await requireProjectPermission(database, authUser, projectId, 'assets:manage');
   validateAssetUpload(file);
   if (!files) throw new AssetUploadError('El almacenamiento de imágenes todavía no está configurado.');
+
+  let usage: {
+    projectAssetCount: number;
+    projectByteSize: number;
+    userAssetCount: number;
+    userByteSize: number;
+  } | null;
+  try {
+    usage = await database.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM assets WHERE project_id = ?) AS "projectAssetCount",
+        (SELECT COALESCE(SUM(byte_size), 0) FROM assets WHERE project_id = ?) AS "projectByteSize",
+        (
+          SELECT COUNT(*) FROM assets AS asset
+          LEFT JOIN projects AS project ON project.id = asset.project_id
+          WHERE COALESCE(asset.uploaded_by_user_id, project.created_by) = ?
+        ) AS "userAssetCount",
+        (
+          SELECT COALESCE(SUM(asset.byte_size), 0) FROM assets AS asset
+          LEFT JOIN projects AS project ON project.id = asset.project_id
+          WHERE COALESCE(asset.uploaded_by_user_id, project.created_by) = ?
+        ) AS "userByteSize"
+    `).bind(projectId, projectId, access.userId, access.userId).first();
+  } catch {
+    throw new AssetUploadError('No se pudo comprobar la cuota de almacenamiento.');
+  }
+  if (!usage) throw new AssetUploadError('No se pudo comprobar la cuota de almacenamiento.');
+  if (usage.projectAssetCount >= MAX_ASSETS_PER_PROJECT || usage.projectByteSize + file.size > MAX_ASSET_BYTES_PER_PROJECT) {
+    throw new AssetQuotaError('El proyecto alcanzó su cuota de 50 imágenes o 100 MiB.');
+  }
+  if (usage.userAssetCount >= MAX_ASSETS_PER_USER || usage.userByteSize + file.size > MAX_ASSET_BYTES_PER_USER) {
+    throw new AssetQuotaError('Tu cuenta alcanzó su cuota de 250 imágenes o 500 MiB.');
+  }
 
   const assetId = crypto.randomUUID();
   const r2Key = assetObjectKey(projectId, assetId, file.type);
   const bytes = await file.arrayBuffer();
+  validateAssetImageDimensions(file.type, new Uint8Array(bytes));
+  const filename = file.name.normalize('NFKC').trim().slice(0, 255) || assetId;
 
   try {
     await files.put(r2Key, bytes, {
@@ -43,25 +90,55 @@ export async function uploadProjectAsset(database: D1Database, files: R2Bucket |
   }
 
   try {
-    const db = createDb(database);
-    await db.insert(assets).values({
-      id: assetId,
+    const result = await database.prepare(`
+      INSERT INTO assets (id, project_id, uploaded_by_user_id, r2_key, filename, content_type, byte_size, alt_text)
+      SELECT ?, ?, ?, ?, ?, ?, ?, NULL
+      WHERE
+        (SELECT COUNT(*) FROM assets WHERE project_id = ?) < ?
+        AND (SELECT COALESCE(SUM(byte_size), 0) FROM assets WHERE project_id = ?) + ? <= ?
+        AND (
+          SELECT COUNT(*) FROM assets AS asset
+          LEFT JOIN projects AS project ON project.id = asset.project_id
+          WHERE COALESCE(asset.uploaded_by_user_id, project.created_by) = ?
+        ) < ?
+        AND (
+          SELECT COALESCE(SUM(asset.byte_size), 0) FROM assets AS asset
+          LEFT JOIN projects AS project ON project.id = asset.project_id
+          WHERE COALESCE(asset.uploaded_by_user_id, project.created_by) = ?
+        ) + ? <= ?
+    `).bind(
+      assetId,
       projectId,
+      access.userId,
       r2Key,
-      filename: file.name.normalize('NFKC').trim().slice(0, 255) || assetId,
-      contentType: file.type,
-      byteSize: bytes.byteLength,
-      altText: null,
-    });
+      filename,
+      file.type,
+      bytes.byteLength,
+      projectId,
+      MAX_ASSETS_PER_PROJECT,
+      projectId,
+      bytes.byteLength,
+      MAX_ASSET_BYTES_PER_PROJECT,
+      access.userId,
+      MAX_ASSETS_PER_USER,
+      access.userId,
+      bytes.byteLength,
+      MAX_ASSET_BYTES_PER_USER,
+    ).run();
+    if ((result.meta?.changes ?? 0) !== 1) throw new AssetQuotaError();
   } catch (error) {
-    await files.delete(r2Key);
+    try {
+      await files.delete(r2Key);
+    } catch {
+      // Failed uploads are never recorded as assets; an orphaned object remains inaccessible.
+    }
     throw error;
   }
 
   return {
     id: assetId,
     projectId,
-    filename: file.name.normalize('NFKC').trim().slice(0, 255) || assetId,
+    filename,
     contentType: file.type,
     byteSize: bytes.byteLength,
     altText: null,
@@ -122,7 +199,14 @@ export async function deleteProjectAsset(database: D1Database, files: R2Bucket |
   let draftDocument: SiteDocument;
   let referencedAssetIds: string[];
   try {
-    draftDocument = JSON.parse(project.draftDocumentJson);
+    const rawDraft = JSON.parse(project.draftDocumentJson) as unknown;
+    const missingAltPaths = findMissingContentImageAltPaths(rawDraft);
+    draftDocument = (missingAltPaths.length > 0
+      ? populateMissingContentImageAlt(rawDraft, new Map((await db.select({ id: assets.id, filename: assets.filename })
+        .from(assets)
+        .where(eq(assets.projectId, projectId)))
+        .map((entry) => [entry.id, entry.filename])))
+      : rawDraft) as SiteDocument;
     referencedAssetIds = collectSiteDocumentAssetIds(toBlockSchemaRegistry(portfolioBlockRegistry), draftDocument);
   } catch {
     throw new AssetUploadError('No se pudo validar el borrador para eliminar la imagen.');
