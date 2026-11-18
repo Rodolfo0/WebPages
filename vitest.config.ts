@@ -5,5 +5,6 @@ export default defineConfig({
     environment: 'node',
     include: ['resources/**/*.test.{ts,tsx}'],
     clearMocks: true,
+    setupFiles: ['./vitest.setup.ts'],
   },
 });

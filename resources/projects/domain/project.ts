@@ -69,26 +69,14 @@ export function normalizeProjectSlug(value: string) {
   return slug;
 }
 
-function parseDetails(
-  input: unknown,
-  schema: typeof createProjectSchema | typeof updateProjectSchema,
-  useNameAsSlug: boolean,
-) {
-  const result = schema.safeParse(input);
+export function parseCreateProjectInput(input: unknown) {
+  const result = createProjectSchema.safeParse(input);
   if (!result.success) {
     throw new ProjectInputError(result.error.issues[0]?.message ?? 'Revisa los datos del proyecto.');
   }
 
   const name = result.data.name;
-  const slugInput = 'slug' in result.data && result.data.slug
-    ? result.data.slug
-    : useNameAsSlug ? name : '';
-
-  return { name, slug: normalizeProjectSlug(slugInput) };
-}
-
-export function parseCreateProjectInput(input: unknown) {
-  return parseDetails(input, createProjectSchema, true);
+  return { name, slug: normalizeProjectSlug(result.data.slug ?? name) };
 }
 
 export function parseUpdateProjectInput(input: unknown) {

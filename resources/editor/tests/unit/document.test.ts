@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createPortfolioTemplate } from '../../../projects/domain/portfolio-template';
+import type { SiteDocument } from '../../../site-document';
 import {
   deleteBlockFromDocument,
   duplicateBlockInDocument,
@@ -9,9 +10,9 @@ import {
 } from '../../domain/document';
 
 describe('updateBlockProps', () => {
-  let document: ReturnType<typeof createPortfolioTemplate>;
-  let page: ReturnType<typeof createPortfolioTemplate>['pages'][number];
-  let hero: ReturnType<typeof createPortfolioTemplate>['pages'][number]['blocks'][number];
+  let document: SiteDocument;
+  let page: SiteDocument['pages'][number];
+  let hero: SiteDocument['pages'][number]['blocks'][number];
 
   beforeEach(() => {
     document = createPortfolioTemplate('Alex Rivera', 'alex-rivera');
@@ -129,8 +130,8 @@ describe('updateBlockProps', () => {
 });
 
 describe('block composition actions', () => {
-  let document: ReturnType<typeof createPortfolioTemplate>;
-  let page: ReturnType<typeof createPortfolioTemplate>['pages'][number];
+  let document: SiteDocument;
+  let page: SiteDocument['pages'][number];
 
   beforeEach(() => {
     document = createPortfolioTemplate('Alex Rivera', 'alex-rivera');
