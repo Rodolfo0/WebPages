@@ -30,6 +30,10 @@ const projectEntrySchema = z.strictObject({
   imageAlt: altTextSchema.default(''),
   url: optionalBlockUrlSchema,
   linkLabel: shortTextSchema(40, 'El texto del enlace'),
+}).superRefine((entry, context) => {
+  if (entry.imageAssetId && !entry.imageAlt.trim()) {
+    context.addIssue({ code: 'custom', path: ['imageAlt'], message: 'Añade texto alternativo para esta imagen.' });
+  }
 });
 
 const MAX_PROJECT_ENTRIES = 9;

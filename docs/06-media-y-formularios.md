@@ -20,14 +20,14 @@ El editor puede leer y administrar assets privados del proyecto solo con una mem
 
 ## Validaciones
 
-Definir antes de implementar:
+La política de archivos es:
 
-- Tipos permitidos, inicialmente JPEG, PNG, WebP y SVG solo si se sanitiza de forma segura.
-- Tamaño máximo por archivo.
-- Cuota por proyecto y por usuario.
-- Dimensiones máximas y mínimas.
-- Texto alternativo obligatorio para imágenes de contenido.
-- Qué ocurre si se elimina un asset todavía usado por un bloque.
+- Se aceptan JPEG, PNG y WebP. El servidor comprueba la firma y las dimensiones reales del contenido; no confía en la extensión ni en el MIME declarado por el navegador.
+- Cada archivo puede ocupar hasta 10 MiB y medir hasta 8192 × 8192 píxeles, con un límite adicional de 40 megapíxeles. El mínimo es 1 × 1 píxel.
+- Cada proyecto puede almacenar hasta 50 imágenes y 100 MiB. Cada cuenta puede subir hasta 250 imágenes y 500 MiB sumando sus proyectos. Los assets anteriores a la cuota se atribuyen al propietario del proyecto; los nuevos se atribuyen a quien los sube.
+- Las imágenes de contenido necesitan texto alternativo no vacío, validado al editar y guardar el borrador. Al abrir borradores antiguos sin texto alternativo, el editor propone el nombre del archivo para que el usuario pueda revisarlo.
+- SVG no está permitido. Se habilitará solo cuando exista una sanitización segura; `nosniff` y servirlo como imagen no sustituyen esa sanitización.
+- Si se elimina una imagen usada en el borrador, el servidor elimina sus referencias de los bloques y aumenta la revisión del borrador. Si la publicación activa todavía la usa, la eliminación se rechaza con `409` hasta publicar una versión sin esa referencia. La eliminación de metadata y referencias del borrador es atómica; R2 se limpia después.
 
 La primera versión puede evitar transformaciones complejas y usar URLs directas. La optimización de imágenes se puede añadir después de medir el tamaño real de los assets.
 
@@ -35,7 +35,7 @@ La primera versión puede evitar transformaciones complejas y usar URLs directas
 
 La aplicación expone `GET/POST /api/projects/{projectId}/assets` para listar y subir assets privados y `GET /api/assets/{assetId}` para entregar una imagen publicada o privada autorizada. Los nombres finales de R2 se generan con el ID de proyecto y el ID aleatorio del asset; el nombre original solo se conserva como metadata.
 
-La base inicial acepta JPEG, PNG y WebP de hasta 10 MB. Esta política temporal se centraliza en el módulo de dominio de assets y no sustituye la configuración final de cuotas, cuotas por usuario, dimensiones ni sanitización/SVG que se definirá en una issue posterior.
+La política anterior se aplica en servidor antes de guardar el objeto en R2. El cuerpo multipart completo se limita a 10 MiB más 64 KiB de sobrecarga, y la inserción condicional en D1 vuelve a comprobar las cuotas para que subidas simultáneas no las excedan. La columna `uploaded_by_user_id` identifica al usuario que consume la cuota de cuenta; los registros previos usan el propietario del proyecto como atribución de compatibilidad.
 
 ## Formulario público
 
