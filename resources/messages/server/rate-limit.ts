@@ -1,4 +1,4 @@
-import { CONTACT_RATE_LIMITS } from '../domain/submission';
+import { FORM_RATE_LIMITS } from '../domain/forms';
 
 export type RateLimitWindow = {
   bucketKey: string;
@@ -35,7 +35,7 @@ export async function ipBucketKey(secret: string, ip: string) {
  * nothing derived from the address is stored, and legitimate messages are still accepted.
  */
 export function rateLimitWindows(now: number, ipKey: string | null): RateLimitWindow[] {
-  return CONTACT_RATE_LIMITS.flatMap((limit) => {
+  return FORM_RATE_LIMITS.flatMap((limit) => {
     const bucketKey = limit.scope === 'project' ? 'project' : ipKey;
     if (!bucketKey) return [];
     return [{

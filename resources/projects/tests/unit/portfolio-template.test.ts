@@ -8,7 +8,7 @@ import {
   collectSiteDocumentAssetIds,
   createSiteDocumentSchema,
 } from '../../../site-document';
-import { documentAcceptsContactMessages } from '../../../messages';
+import { publishedFormExists } from '../../../messages';
 import { createPortfolioTemplate } from '../../domain/portfolio-template';
 
 /**
@@ -73,7 +73,7 @@ describe('portfolio template', () => {
     const contact = template.pages[0].blocks.find((block) => block.type === 'contact');
 
     expect(contact?.props.formEnabled).toBe(true);
-    expect(documentAcceptsContactMessages(template)).toBe(true);
+    expect(publishedFormExists(template, contact!.id, 'contact')).toBe(true);
   });
 
   it('gives every block a unique id', () => {

@@ -14,7 +14,7 @@ afterEach(() => {
 
 function renderForm(endpoint: string | null = ENDPOINT) {
   return render(
-    <ContactForm idPrefix="block-1" endpoint={endpoint ?? undefined} submitLabel="Enviar mensaje" successMessage="¡Gracias!" />,
+    <ContactForm formId="block-1" endpoint={endpoint ?? undefined} submitLabel="Enviar mensaje" successMessage="¡Gracias!" />,
   );
 }
 
@@ -53,9 +53,9 @@ describe('ContactForm', () => {
     expect(url).toBe(ENDPOINT);
     expect(init).toMatchObject({ method: 'POST', headers: { 'Content-Type': 'application/json' } });
     expect(JSON.parse(init.body)).toEqual({
-      name: 'Ana López',
-      email: 'ana@example.test',
-      message: 'Hola, me interesa tu trabajo.',
+      formId: 'block-1',
+      formType: 'contact',
+      fields: { name: 'Ana López', email: 'ana@example.test', message: 'Hola, me interesa tu trabajo.' },
       website: '',
     });
     expect(screen.getByLabelText('Nombre')).toHaveValue('');

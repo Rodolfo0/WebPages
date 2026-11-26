@@ -1,21 +1,31 @@
-export { documentAcceptsContactMessages } from './domain/accepts-messages';
 export {
   CONTACT_EMAIL_MAX,
   CONTACT_FIELDS,
-  CONTACT_HONEYPOT_FIELD,
   CONTACT_MESSAGE_MAX,
   CONTACT_NAME_MAX,
-  CONTACT_RATE_LIMITS,
-  CONTACT_REQUEST_MAX_BYTES,
-  contactFieldErrors,
-  contactMessagesEndpoint,
-  contactSubmissionSchema,
+  CONTACT_PAYLOAD_VERSION,
+  contactFieldsSchema,
+} from './domain/contact';
+export type { ContactField, ContactFields, ContactFieldsInput } from './domain/contact';
+export {
+  FORM_DEFINITIONS,
+  FORM_HONEYPOT_FIELD,
+  FORM_RATE_LIMITS,
+  FORM_REQUEST_MAX_BYTES,
+  FORM_TYPES,
+  formFieldErrors,
+  formSubmissionEndpoint,
+  formSubmissionRequestSchema,
   isHoneypotFilled,
-} from './domain/submission';
+  publishedFormExists,
+  readStoredFormSubmission,
+  validateFormFields,
+} from './domain/forms';
 export type {
-  ContactField,
-  ContactFieldErrors,
-  ContactSubmission,
-  ContactSubmissionErrorCode,
-  ContactSubmissionInput,
-} from './domain/submission';
+  FormFieldErrors,
+  FormPayload,
+  FormSubmissionErrorCode,
+  FormSubmissionRequest,
+  FormType,
+  StoredFormSubmission,
+} from './domain/forms';

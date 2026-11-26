@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { getPlatformProxy } from 'wrangler';
-import { handleCreateFormSubmission, recordContactSubmission } from '../../server';
+import { readStoredFormSubmission } from '../..';
+import { handleCreateFormSubmission, recordFormSubmission } from '../../server';
 import { ipBucketKey } from '../../server/rate-limit';
 
 /**
@@ -18,7 +19,9 @@ import { ipBucketKey } from '../../server/rate-limit';
 
 const ORIGIN = 'https://sites.example.test';
 const SECRET = 'integration-test-hmac-key';
-const valid = { name: 'Ana López', email: 'ana@example.test', message: 'Hola, me interesa tu trabajo.' };
+const fields = { name: 'Ana López', email: 'ana@example.test', message: 'Hola, me interesa tu trabajo.' };
+const FORM_ID = 'block-contact';
+const valid = { formId: FORM_ID, formType: 'contact', fields };
 
 let stateDirectory: string;
 let database: D1Database;
@@ -53,7 +56,7 @@ test.afterAll(async () => {
 });
 
 function publishedDocument(contactProps: Record<string, unknown>) {
-  return JSON.stringify({ version: 1, pages: [{ blocks: [{ type: 'contact', props: contactProps }] }] });
+  return JSON.stringify({ version: 1, pages: [{ blocks: [{ id: FORM_ID, type: 'contact', props: contactProps }] }] });
 }
 
 async function seedProject(options: { formEnabled?: boolean; published?: boolean; status?: 'draft' | 'published' | 'archived' } = {}) {
@@ -67,15 +70,16 @@ async function seedProject(options: { formEnabled?: boolean; published?: boolean
     VALUES (?, ?, 'Portafolio', ?, ?, ?)
   `).bind(projectId, userId, slug, options.status ?? 'published', publishedDocument({ formEnabled: true })).run();
 
+  let versionId: string | null = null;
   if (options.published ?? true) {
-    const versionId = randomUUID();
+    versionId = randomUUID();
     await database.prepare(`
       INSERT INTO site_versions (id, project_id, document_json, document_version, published_at)
       VALUES (?, ?, ?, 1, ?)
     `).bind(versionId, projectId, publishedDocument({ formEnabled: options.formEnabled ?? true, hidden: false }), Date.now()).run();
     await database.prepare('UPDATE projects SET published_version_id = ? WHERE id = ?').bind(versionId, projectId).run();
   }
-  return { projectId, slug };
+  return { projectId, slug, versionId: versionId ?? '' };
 }
 
 function submit(slug: string, body: Record<string, unknown> = valid, ip = '203.0.113.7') {
@@ -88,20 +92,63 @@ function submit(slug: string, body: Record<string, unknown> = valid, ip = '203.0
 }
 
 async function storedMessages(projectId: string) {
-  const { results } = await database.prepare(
-    'SELECT name, email, message, status FROM form_submissions WHERE project_id = ?',
-  ).bind(projectId).all();
+  const { results } = await database.prepare(`
+    SELECT site_version_id AS siteVersionId, form_id AS formId, form_type AS formType,
+      payload_version AS payloadVersion, payload_json AS payloadJson, status
+    FROM form_submissions WHERE project_id = ?
+  `).bind(projectId).all<{
+    siteVersionId: string | null;
+    formId: string;
+    formType: string;
+    payloadVersion: number;
+    payloadJson: string;
+    status: string;
+  }>();
   return results;
 }
 
-test('stores a message for the published project as unread', async () => {
-  const { projectId, slug } = await seedProject();
+/** Stores a submission directly, bypassing the HTTP layer, to exercise the rate-limit SQL. */
+function record(target: { projectId: string; versionId: string }, ipKey: string | null, now: number) {
+  return recordFormSubmission(database, {
+    projectId: target.projectId,
+    siteVersionId: target.versionId,
+    formId: FORM_ID,
+    formType: 'contact',
+    payloadVersion: 1,
+    payload: fields,
+    store: true,
+    ipKey,
+    now,
+  });
+}
 
-  const response = await submit(slug, { ...valid, name: '  Ana López ' });
+test('stores the fields as JSON with the metadata needed to read them back', async () => {
+  const { projectId, slug, versionId } = await seedProject();
+
+  const response = await submit(slug, { ...valid, fields: { ...fields, name: '  Ana López ' } });
 
   expect(response.status).toBe(201);
   expect(await response.json()).toEqual({ ok: true });
-  expect(await storedMessages(projectId)).toEqual([{ ...valid, status: 'unread' }]);
+  const rows = await storedMessages(projectId);
+  expect(rows).toEqual([{
+    siteVersionId: versionId,
+    formId: FORM_ID,
+    formType: 'contact',
+    payloadVersion: 1,
+    payloadJson: JSON.stringify(fields),
+    status: 'unread',
+  }]);
+  expect(readStoredFormSubmission(rows[0])).toEqual({ formType: 'contact', payloadVersion: 1, payload: fields });
+});
+
+test('rejects payloads that are not JSON objects at the database level', async () => {
+  const { projectId } = await seedProject();
+  for (const payloadJson of ['[]', '"texto"', '{"name":']) {
+    await expect(database.prepare(`
+      INSERT INTO form_submissions (id, project_id, form_id, form_type, payload_version, payload_json)
+      VALUES (?, ?, ?, 'contact', 1, ?)
+    `).bind(randomUUID(), projectId, FORM_ID, payloadJson).run()).rejects.toThrow(/CHECK constraint failed/);
+  }
 });
 
 test('refuses unpublished, archived and form-disabled projects alike', async () => {
@@ -118,6 +165,10 @@ test('refuses unpublished, archived and form-disabled projects alike', async () 
     expect(await storedMessages(projectId)).toEqual([]);
   }
   expect((await submit('sitio-inexistente')).status).toBe(404);
+
+  const { projectId, slug } = await seedProject();
+  expect((await submit(slug, { ...valid, formId: 'block-other' })).status).toBe(404);
+  expect(await storedMessages(projectId)).toEqual([]);
 });
 
 test('drops honeypot hits while counting them, without storing the address', async () => {
@@ -136,11 +187,12 @@ test('drops honeypot hits while counting them, without storing the address', asy
 });
 
 test('limits one address per project and leaves other addresses unaffected', async () => {
-  const { projectId } = await seedProject();
+  const target = await seedProject();
+  const { projectId } = target;
   const now = Date.UTC(2026, 10, 25, 10, 1);
   const sameAddress = await ipBucketKey(SECRET, '198.51.100.1');
   const otherAddress = await ipBucketKey(SECRET, '198.51.100.2');
-  const send = (ipKey: string) => recordContactSubmission(database, { projectId, submission: valid, store: true, ipKey, now });
+  const send = (ipKey: string) => record(target, ipKey, now);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     expect(await send(sameAddress)).toEqual({ status: 'accepted' });
@@ -151,39 +203,39 @@ test('limits one address per project and leaves other addresses unaffected', asy
 });
 
 test('does not let concurrent submissions pass the limit', async () => {
-  const { projectId } = await seedProject();
+  const target = await seedProject();
+  const { projectId } = target;
   const now = Date.UTC(2026, 10, 25, 10, 1);
   const ipKey = await ipBucketKey(SECRET, '198.51.100.3');
 
-  const results = await Promise.all(Array.from({ length: 8 }, () => (
-    recordContactSubmission(database, { projectId, submission: valid, store: true, ipKey, now })
-  )));
+  const results = await Promise.all(Array.from({ length: 8 }, () => record(target, ipKey, now)));
 
   expect(results.filter((result) => result.status === 'accepted')).toHaveLength(3);
   expect(await storedMessages(projectId)).toHaveLength(3);
 });
 
 test('caps a project even when addresses rotate or no secret is configured', async () => {
-  const { projectId } = await seedProject();
+  const target = await seedProject();
   const now = Date.UTC(2026, 10, 25, 10, 1);
 
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    const result = await recordContactSubmission(database, { projectId, submission: valid, store: true, ipKey: null, now });
+    const result = await record(target, null, now);
     expect(result.status).toBe('accepted');
   }
-  const blocked = await recordContactSubmission(database, { projectId, submission: valid, store: true, ipKey: null, now });
+  const blocked = await record(target, null, now);
   expect(blocked).toEqual({ status: 'rate_limited', retryAfterSeconds: 3540 });
 });
 
 test('removes counter rows that can no longer affect any window', async () => {
-  const { projectId } = await seedProject();
+  const target = await seedProject();
+  const { projectId } = target;
   const now = Date.UTC(2026, 10, 25, 10, 1);
   await database.prepare(`
     INSERT INTO form_submission_rate_limits (project_id, bucket_key, window_ms, window_start, count)
     VALUES (?, 'project', 3600000, ?, 60)
   `).bind(projectId, now - 3 * 24 * 3_600_000).run();
 
-  await recordContactSubmission(database, { projectId, submission: valid, store: true, ipKey: null, now });
+  await record(target, null, now);
 
   const { results } = await database.prepare(
     'SELECT window_start AS windowStart FROM form_submission_rate_limits WHERE project_id = ?',

@@ -1,3 +1,3 @@
 export { handleCreateFormSubmission } from './handlers';
-export { recordContactSubmission, resolveContactSite } from './submit-message';
-export type { ContactSubmissionResult } from './submit-message';
+export { recordFormSubmission, resolveFormTarget } from './submit-message';
+export type { FormSubmissionResult } from './submit-message';

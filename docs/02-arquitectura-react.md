@@ -38,7 +38,7 @@ resources/
     domain/                   # reglas de permisos y acceso por proyecto
     server/                   # consultas de membresía y autorización
   messages/
-    domain/                   # schema y política del formulario público de contacto
+    domain/                   # schemas y política de los formularios públicos
     server/                   # ruta pública, límite de envíos y guardado en D1
     ui/                       # formulario que muestra el bloque de contacto
   <resource>/

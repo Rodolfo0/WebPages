@@ -1,29 +1,29 @@
-import { documentAcceptsContactMessages } from '../domain/accepts-messages';
-import { CONTACT_RATE_LIMIT_RETENTION_MS, type ContactSubmission } from '../domain/submission';
+import { FORM_RATE_LIMIT_RETENTION_MS, type FormType, publishedFormExists } from '../domain/forms';
 import { type RateLimitWindow, rateLimitWindows, retryAfterSeconds } from './rate-limit';
 
 const SITE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SITE_SLUG_MAX = 63;
 
 /**
- * Resolves the project that may receive messages through a public slug.
+ * Resolves where a public form submission belongs.
  *
  * Only the snapshot referenced by `published_version_id` is read, never the draft, and the project
- * must not be archived. A missing, unpublished or archived project and a snapshot without an
- * enabled form all resolve to `null`, so the route answers the same way for each of them.
+ * must not be archived. The snapshot must contain an active form with that block id and type. A
+ * missing, unpublished or archived project and a snapshot without that form all resolve to `null`,
+ * so the route answers the same way for each of them.
  */
-export async function resolveContactSite(database: D1Database, slug: string) {
+export async function resolveFormTarget(database: D1Database, slug: string, formId: string, formType: FormType) {
   if (slug.length > SITE_SLUG_MAX || !SITE_SLUG_PATTERN.test(slug)) return null;
 
   const row = await database.prepare(`
-    SELECT project.id AS "projectId", version.document_json AS "documentJson"
+    SELECT project.id AS "projectId", version.id AS "siteVersionId", version.document_json AS "documentJson"
     FROM projects AS project
     INNER JOIN site_versions AS version
       ON version.id = project.published_version_id
       AND version.project_id = project.id
     WHERE project.slug = ? AND project.status <> 'archived'
     LIMIT 1
-  `).bind(slug).first<{ projectId: string; documentJson: string }>();
+  `).bind(slug).first<{ projectId: string; siteVersionId: string; documentJson: string }>();
   if (!row) return null;
 
   let document: unknown;
@@ -32,16 +32,23 @@ export async function resolveContactSite(database: D1Database, slug: string) {
   } catch {
     return null;
   }
-  return documentAcceptsContactMessages(document) ? { projectId: row.projectId } : null;
+  return publishedFormExists(document, formId, formType)
+    ? { projectId: row.projectId, siteVersionId: row.siteVersionId }
+    : null;
 }
 
-export type ContactSubmissionResult =
+export type FormSubmissionResult =
   | { status: 'accepted' }
   | { status: 'rate_limited'; retryAfterSeconds: number };
 
-type RecordContactSubmissionInput = {
+type RecordFormSubmissionInput = {
   projectId: string;
-  submission: ContactSubmission;
+  siteVersionId: string;
+  formId: string;
+  formType: FormType;
+  payloadVersion: number;
+  /** Validated fields of the form; stored as a JSON object. */
+  payload: Record<string, unknown>;
   /** False for honeypot hits: the request consumes the limits but nothing is stored. */
   store: boolean;
   ipKey: string | null;
@@ -52,16 +59,16 @@ type RecordContactSubmissionInput = {
 const WINDOW_MATCH = 'project_id = ? AND bucket_key = ? AND window_ms = ? AND window_start = ?';
 
 /**
- * Consumes the rate-limit windows and stores the message in one D1 batch.
+ * Consumes the rate-limit windows and stores the submission in one D1 batch.
  *
  * D1 runs a batch as a single transaction, so the counter increments and the conditional insert
  * observe the same state: two concurrent submissions cannot both pass the last free slot. A rejected
  * request still increments its counters, which keeps a flood from probing the limit for free.
  */
-export async function recordContactSubmission(
+export async function recordFormSubmission(
   database: D1Database,
-  input: RecordContactSubmissionInput,
-): Promise<ContactSubmissionResult> {
+  input: RecordFormSubmissionInput,
+): Promise<FormSubmissionResult> {
   const now = input.now ?? Date.now();
   const windows = rateLimitWindows(now, input.ipKey);
   const windowBindings = (window: RateLimitWindow) => [
@@ -70,7 +77,7 @@ export async function recordContactSubmission(
 
   const statements: D1PreparedStatement[] = [
     database.prepare('DELETE FROM form_submission_rate_limits WHERE window_start < ?')
-      .bind(now - CONTACT_RATE_LIMIT_RETENTION_MS),
+      .bind(now - FORM_RATE_LIMIT_RETENTION_MS),
     ...windows.map((window) => database.prepare(`
       INSERT INTO form_submission_rate_limits (project_id, bucket_key, window_ms, window_start, count)
       VALUES (?, ?, ?, ?, 1)
@@ -85,15 +92,18 @@ export async function recordContactSubmission(
       .map(() => `(SELECT count FROM form_submission_rate_limits WHERE ${WINDOW_MATCH}) <= ?`)
       .join(' AND ');
     statements.push(database.prepare(`
-      INSERT INTO form_submissions (id, project_id, name, email, message, status)
-      SELECT ?, ?, ?, ?, ?, 'unread'
+      INSERT INTO form_submissions
+        (id, project_id, site_version_id, form_id, form_type, payload_version, payload_json, status)
+      SELECT ?, ?, ?, ?, ?, ?, ?, 'unread'
       WHERE ${conditions}
     `).bind(
       input.id ?? crypto.randomUUID(),
       input.projectId,
-      input.submission.name,
-      input.submission.email,
-      input.submission.message,
+      input.siteVersionId,
+      input.formId,
+      input.formType,
+      input.payloadVersion,
+      JSON.stringify(input.payload),
       ...windows.flatMap((window) => [...windowBindings(window), window.max]),
     ));
   }

@@ -1,21 +1,22 @@
 import { isSameOrigin, readLimitedBody, RequestBodyTooLargeError } from '../../../shared/http';
 import {
-  CONTACT_REQUEST_MAX_BYTES,
-  contactFieldErrors,
-  contactSubmissionSchema,
-  type ContactFieldErrors,
-  type ContactSubmissionErrorCode,
+  FORM_DEFINITIONS,
+  FORM_REQUEST_MAX_BYTES,
+  type FormFieldErrors,
+  type FormSubmissionErrorCode,
+  formSubmissionRequestSchema,
   isHoneypotFilled,
-} from '../domain/submission';
+  validateFormFields,
+} from '../domain/forms';
 import { ipBucketKey } from './rate-limit';
-import { recordContactSubmission, resolveContactSite } from './submit-message';
+import { recordFormSubmission, resolveFormTarget } from './submit-message';
 
 type MessageBindings = {
   DB?: D1Database;
   FORM_RATE_LIMIT_SECRET?: string;
 };
 
-const ERROR_MESSAGES: Record<ContactSubmissionErrorCode, string> = {
+const ERROR_MESSAGES: Record<FormSubmissionErrorCode, string> = {
   form_invalid: 'Revisa los campos del formulario.',
   origin_invalid: 'No se pudo enviar el mensaje desde esta página.',
   site_not_found: 'Este sitio no recibe mensajes.',
@@ -33,9 +34,9 @@ function json(body: unknown, status: number, headers: Record<string, string> = {
 }
 
 function errorResponse(
-  code: ContactSubmissionErrorCode,
+  code: FormSubmissionErrorCode,
   status: number,
-  extra: { fields?: ContactFieldErrors; headers?: Record<string, string> } = {},
+  extra: { fields?: FormFieldErrors; headers?: Record<string, string> } = {},
 ) {
   return json(
     { error: code, message: ERROR_MESSAGES[code], ...(extra.fields ? { fields: extra.fields } : {}) },
@@ -45,11 +46,15 @@ function errorResponse(
 }
 
 /**
- * `POST /api/sites/{slug}/messages`: stores a message sent from a published site.
+ * `POST /api/sites/{slug}/messages`: stores a submission sent from a form of a published site.
+ *
+ * The body names the form (`formId`, the id of its block, and `formType`) and carries its `fields`.
+ * The fields are validated against the schema of that type before D1 is touched; the published
+ * snapshot then has to contain an active form with that id and type.
  *
  * The route is public, so every answer is deliberately uninformative: the same 404 covers a slug
- * that does not exist, is not published, is archived or has no enabled form, and no response
- * carries project ids, member data or counters. Nothing from the request is logged.
+ * that does not exist, is not published, is archived or has no such form, and no response carries
+ * project ids, member data or counters. Nothing from the request is logged.
  */
 export async function handleCreateFormSubmission(request: Request, bindings: MessageBindings, slug: string) {
   if (!isSameOrigin(request, true)) return errorResponse('origin_invalid', 403);
@@ -59,7 +64,7 @@ export async function handleCreateFormSubmission(request: Request, bindings: Mes
 
   let body: Uint8Array<ArrayBuffer>;
   try {
-    body = await readLimitedBody(request, CONTACT_REQUEST_MAX_BYTES);
+    body = await readLimitedBody(request, FORM_REQUEST_MAX_BYTES);
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return errorResponse('payload_too_large', 413);
     return errorResponse('form_invalid', 400);
@@ -72,20 +77,28 @@ export async function handleCreateFormSubmission(request: Request, bindings: Mes
     return errorResponse('form_invalid', 400);
   }
 
-  const parsed = contactSubmissionSchema.safeParse(payload);
-  if (!parsed.success) return errorResponse('form_invalid', 400, { fields: contactFieldErrors(parsed.error) });
+  const parsed = formSubmissionRequestSchema.safeParse(payload);
+  if (!parsed.success) return errorResponse('form_invalid', 400);
+  const { formId, formType } = parsed.data;
+
+  const fields = validateFormFields(formType, parsed.data.fields);
+  if (!fields.success) return errorResponse('form_invalid', 400, { fields: fields.fieldErrors });
 
   if (!bindings.DB) return errorResponse('messages_unavailable', 503);
 
   try {
-    const site = await resolveContactSite(bindings.DB, slug);
-    if (!site) return errorResponse('site_not_found', 404);
+    const target = await resolveFormTarget(bindings.DB, slug, formId, formType);
+    if (!target) return errorResponse('site_not_found', 404);
 
     const secret = bindings.FORM_RATE_LIMIT_SECRET?.trim();
     const ip = request.headers.get('cf-connecting-ip')?.trim() || 'unknown';
-    const result = await recordContactSubmission(bindings.DB, {
-      projectId: site.projectId,
-      submission: parsed.data,
+    const result = await recordFormSubmission(bindings.DB, {
+      projectId: target.projectId,
+      siteVersionId: target.siteVersionId,
+      formId,
+      formType,
+      payloadVersion: FORM_DEFINITIONS[formType].payloadVersion,
+      payload: fields.payload,
       store: !isHoneypotFilled(parsed.data),
       ipKey: secret ? await ipBucketKey(secret, ip) : null,
     });

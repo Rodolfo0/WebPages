@@ -136,7 +136,7 @@ export const contactBlock = defineBlock<ContactProps>({
           <BlockActions items={items} />
           {props.formEnabled ? (
             <ContactForm
-              idPrefix={blockId}
+              formId={blockId}
               endpoint={contactFormEndpoint}
               submitLabel={props.formSubmitLabel}
               successMessage={props.formSuccessMessage}

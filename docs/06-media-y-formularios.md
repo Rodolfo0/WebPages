@@ -41,13 +41,24 @@ La política anterior se aplica en servidor antes de guardar el objeto en R2. El
 
 El bloque `contact` muestra un formulario cuando su prop `formEnabled` está activa. La plantilla de portafolio la activa por defecto; los bloques creados antes de esta prop la reciben desactivada. El texto del botón (`formSubmitLabel`) y el mensaje de confirmación (`formSuccessMessage`) se editan desde el panel de propiedades. El documento nunca guarda la URL de envío: el renderizador público pasa `contactFormEndpoint` en el contexto del bloque y, sin ese valor (por ejemplo en el editor), el formulario se muestra deshabilitado como vista previa.
 
-El formulario envía JSON a `POST /api/sites/{slug}/messages`. La lógica vive en `resources/messages/`, y el schema de `resources/messages/domain/submission.ts` valida tanto en el navegador como en el servidor.
+El formulario envía JSON a `POST /api/sites/{slug}/messages`. La lógica vive en `resources/messages/`: `domain/forms.ts` define la parte común a todos los tipos de formulario y `domain/contact.ts` los campos de `contact`, que se validan con el mismo schema en el navegador y en el servidor. El cuerpo de la petición es:
 
-- **Resolución:** el servidor busca el proyecto por slug, exige que no esté archivado y lee solo el snapshot de `published_version_id`. El snapshot debe tener un bloque `contact` visible con `formEnabled === true`. El borrador nunca habilita el formulario.
-- **Campos:** `name` (1–100 caracteres), `email` (email válido, hasta 254) y `message` (1–5000). Se normalizan a NFKC y se recortan. Se rechazan caracteres de control, salvo saltos de línea y tabuladores en el mensaje, así como cualquier clave desconocida.
+```json
+{
+  "formId": "<id del bloque>",
+  "formType": "contact",
+  "fields": { "name": "…", "email": "…", "message": "…" },
+  "website": ""
+}
+```
+
+Para agregar otro tipo de formulario, registra en `FORM_DEFINITIONS` el bloque que lo muestra, la versión de su payload y el schema de sus campos.
+
+- **Resolución:** el servidor busca el proyecto por slug, exige que no esté archivado y lee solo el snapshot de `published_version_id`. El snapshot debe tener un bloque visible con id `formId`, del tipo que corresponde a `formType` y con `formEnabled === true`. El borrador nunca habilita el formulario.
+- **Campos:** el sobre (`formId` de hasta 128 caracteres, `formType` conocido) se valida primero, sin detalle por campo. Después, los campos de `contact`: `name` (1–100 caracteres), `email` (email válido, hasta 254) y `message` (1–5000). Se normalizan a NFKC y se recortan. Se rechazan caracteres de control, salvo saltos de línea y tabuladores en el mensaje, así como cualquier clave desconocida. Ambas validaciones ocurren antes de consultar D1.
 - **Honeypot:** el campo oculto `website` queda fuera del orden de tabulación y del árbol de accesibilidad. Si llega con contenido, la respuesta es la misma que la de un envío válido (`201`), pero el mensaje no se guarda. El intento sí consume el límite de envíos.
-- **Límite de envíos:** ventanas fijas de 3 envíos cada 10 minutos y 10 cada 24 horas por IP y proyecto, más 60 por hora por proyecto. La IP proviene de `CF-Connecting-IP` y se guarda solo como HMAC con `FORM_RATE_LIMIT_SECRET`. Sin ese secreto, solo se aplica el límite por proyecto. Los contadores y la inserción se ejecutan en un único batch de D1, de modo que los envíos simultáneos no superan el límite. Al excederlo, la ruta responde `429` con `Retry-After`.
-- **Guardado:** el mensaje se inserta en `form_submissions` con `status = 'unread'`. No se guardan IP, user agent ni metadata adicional.
+- **Límite de envíos:** ventanas fijas de 3 envíos cada 10 minutos y 10 cada 24 horas por IP y proyecto, más 60 por hora por proyecto. Los límites se comparten entre todos los formularios del proyecto. La IP proviene de `CF-Connecting-IP` y se guarda solo como HMAC con `FORM_RATE_LIMIT_SECRET`. Sin ese secreto, solo se aplica el límite por proyecto. Los contadores y la inserción se ejecutan en un único batch de D1, de modo que los envíos simultáneos no superan el límite. Al excederlo, la ruta responde `429` con `Retry-After`.
+- **Guardado:** los campos validados se guardan como objeto JSON en `form_submissions.payload_json`, junto con `form_type`, `payload_version`, `form_id` y `site_version_id`, y con `status = 'unread'`. No se guardan IP ni user agent. [Datos y persistencia](03-datos-y-persistencia.md) describe cómo interpretar cada fila.
 - **Privacidad:** la ruta exige `Origin` igual al de la aplicación (`403` si no) y solo acepta `application/json` (`415`) de hasta 16 KiB (`413`). Responde con el mismo `404` si el slug no existe, no está publicado, está archivado o no ofrece el formulario. Ninguna respuesta incluye IDs del proyecto ni datos de sus miembros, y la ruta no registra el contenido de la petición.
 - **Respuestas:** `201 {"ok":true}`; `400` con `fields` por campo; `503` genérico ante fallos de D1. Todas usan `Cache-Control: no-store`.
 

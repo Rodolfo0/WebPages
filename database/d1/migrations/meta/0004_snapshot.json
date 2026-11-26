@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0ae1b511-9455-483c-bcb6-0a53ded09798",
+  "id": "60ae5b64-db91-412e-991e-328599247bd5",
   "prevId": "00b2e6f7-4bb6-4b60-90bc-13386c42569a",
   "tables": {
     "assets": {
@@ -237,22 +237,36 @@
           "notNull": true,
           "autoincrement": false
         },
-        "name": {
-          "name": "name",
+        "site_version_id": {
+          "name": "site_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "form_id": {
+          "name": "form_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "email": {
-          "name": "email",
+        "form_type": {
+          "name": "form_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "message": {
-          "name": "message",
+        "payload_version": {
+          "name": "payload_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload_json": {
+          "name": "payload_json",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -284,6 +298,13 @@
             "created_at"
           ],
           "isUnique": false
+        },
+        "form_submissions_site_version_id_idx": {
+          "name": "form_submissions_site_version_id_idx",
+          "columns": [
+            "site_version_id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -299,22 +320,39 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "form_submissions_site_version_id_site_versions_id_fk": {
+          "name": "form_submissions_site_version_id_site_versions_id_fk",
+          "tableFrom": "form_submissions",
+          "tableTo": "site_versions",
+          "columnsFrom": [
+            "site_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "form_submissions_name_nonempty": {
-          "name": "form_submissions_name_nonempty",
-          "value": "length(trim(\"form_submissions\".\"name\")) > 0"
+        "form_submissions_form_id_nonempty": {
+          "name": "form_submissions_form_id_nonempty",
+          "value": "length(trim(\"form_submissions\".\"form_id\")) > 0"
         },
-        "form_submissions_email_nonempty": {
-          "name": "form_submissions_email_nonempty",
-          "value": "length(trim(\"form_submissions\".\"email\")) > 0"
+        "form_submissions_form_type_nonempty": {
+          "name": "form_submissions_form_type_nonempty",
+          "value": "length(trim(\"form_submissions\".\"form_type\")) > 0"
         },
-        "form_submissions_message_nonempty": {
-          "name": "form_submissions_message_nonempty",
-          "value": "length(trim(\"form_submissions\".\"message\")) > 0"
+        "form_submissions_payload_version_positive": {
+          "name": "form_submissions_payload_version_positive",
+          "value": "\"form_submissions\".\"payload_version\" > 0"
+        },
+        "form_submissions_payload_json_object": {
+          "name": "form_submissions_payload_json_object",
+          "value": "json_valid(\"form_submissions\".\"payload_json\") and json_type(\"form_submissions\".\"payload_json\") = 'object'"
         },
         "form_submissions_status_valid": {
           "name": "form_submissions_status_valid",

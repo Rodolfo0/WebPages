@@ -91,7 +91,7 @@ D1_DATABASE_ID=00000000-0000-4000-8000-000000000000 pnpm build
 pnpm exec wrangler d1 migrations apply site-creator-d1 --local --config dist/server/wrangler.json
 ```
 
-El UUID del comando es el identificador local predeterminado de `vite.config.ts`. Las migraciones crean el esquema base, agregan referencias de assets a las versiones publicadas, registran quién sube cada imagen para aplicar las cuotas de cuenta y crean los contadores del límite de envíos del formulario de contacto.
+El UUID del comando es el identificador local predeterminado de `vite.config.ts`. Las migraciones crean el esquema base, agregan referencias de assets a las versiones publicadas, registran quién sube cada imagen para aplicar las cuotas de cuenta y crean los contadores del límite de envíos de los formularios públicos. La migración `0004` también recrea `form_submissions` para guardar cada envío como JSON con su tipo de formulario y versión.
 
 Para probar el límite por IP del formulario en local, agrega una clave de desarrollo a `VARS_JSON` en `.env.local`, por ejemplo `"FORM_RATE_LIMIT_SECRET":"<clave-local-de-desarrollo>"`. Usa ese mecanismo solo en local; en producción la clave va en `SECRETS_JSON`.
 

@@ -3,23 +3,27 @@ import { handleCreateFormSubmission } from '../../server';
 
 const ORIGIN = 'https://app.example.test';
 const ENDPOINT = `${ORIGIN}/api/sites/mi-portafolio/messages`;
-const valid = { name: 'Ana López', email: 'ana@example.test', message: 'Hola, me interesa tu trabajo.' };
+const fields = { name: 'Ana López', email: 'ana@example.test', message: 'Hola, me interesa tu trabajo.' };
+const valid = { formId: 'block-contact', formType: 'contact', fields };
 
 type FakeStatement = { sql: string; bindings: unknown[] };
 
 function publishedDocument(contactProps: Record<string, unknown> = { formEnabled: true, hidden: false }) {
-  return JSON.stringify({ pages: [{ blocks: [{ type: 'hero', props: {} }, { type: 'contact', props: contactProps }] }] });
+  return JSON.stringify({ pages: [{ blocks: [
+    { id: 'block-hero', type: 'hero', props: {} },
+    { id: 'block-contact', type: 'contact', props: contactProps },
+  ] }] });
 }
 
+const publishedSite = (documentJson = publishedDocument()) => ({ projectId: 'project-1', siteVersionId: 'version-1', documentJson });
+
 function fakeDatabase(options: {
-  site?: { projectId: string; documentJson: string } | null;
+  site?: { projectId: string; siteVersionId: string; documentJson: string } | null;
   counts?: number[];
   inserted?: boolean;
   failBatch?: boolean;
 } = {}) {
-  const site = options.site === undefined
-    ? { projectId: 'project-1', documentJson: publishedDocument() }
-    : options.site;
+  const site = options.site === undefined ? publishedSite() : options.site;
   const counts = [...(options.counts ?? [])];
   const batches: FakeStatement[][] = [];
   const queries: FakeStatement[] = [];
@@ -67,10 +71,14 @@ function contactRequest(body: unknown, headers: Record<string, string> = {}) {
 const bindings = (db: D1Database, secret: string | undefined = 'test-secret') => ({ DB: db, FORM_RATE_LIMIT_SECRET: secret });
 
 describe('public contact submission route', () => {
-  it('stores a valid message for the published project', async () => {
+  it('stores the fields as a JSON payload with the form metadata', async () => {
     const { db, batches, queries } = fakeDatabase();
 
-    const response = await handleCreateFormSubmission(contactRequest({ ...valid, name: '  Ana López ' }), bindings(db), 'mi-portafolio');
+    const response = await handleCreateFormSubmission(
+      contactRequest({ ...valid, fields: { ...fields, name: '  Ana López ' } }),
+      bindings(db),
+      'mi-portafolio',
+    );
 
     expect(response.status).toBe(201);
     expect(response.headers.get('cache-control')).toBe('no-store');
@@ -81,7 +89,7 @@ describe('public contact submission route', () => {
     expect(queries[0].bindings).toEqual(['mi-portafolio']);
 
     const insert = batches[0].find((statement) => statement.sql.includes('INSERT INTO form_submissions'))!;
-    expect(insert.bindings.slice(1, 5)).toEqual(['project-1', 'Ana López', valid.email, valid.message]);
+    expect(insert.bindings.slice(1, 7)).toEqual(['project-1', 'version-1', 'block-contact', 'contact', 1, JSON.stringify(fields)]);
   });
 
   it('answers a filled honeypot like a stored message without storing it', async () => {
@@ -128,14 +136,16 @@ describe('public contact submission route', () => {
   });
 
   it.each([
-    ['an unknown slug', { site: null }],
-    ['a snapshot without an enabled form', { site: { projectId: 'project-1', documentJson: publishedDocument({ formEnabled: false }) } }],
-    ['a hidden contact block', { site: { projectId: 'project-1', documentJson: publishedDocument({ formEnabled: true, hidden: true }) } }],
-    ['a snapshot published before the form existed', { site: { projectId: 'project-1', documentJson: publishedDocument({}) } }],
-  ])('returns the same 404 for %s', async (_case, options) => {
+    ['an unknown slug', { site: null }, valid],
+    ['a snapshot without an enabled form', { site: publishedSite(publishedDocument({ formEnabled: false })) }, valid],
+    ['a hidden contact block', { site: publishedSite(publishedDocument({ formEnabled: true, hidden: true })) }, valid],
+    ['a snapshot published before the form existed', { site: publishedSite(publishedDocument({})) }, valid],
+    ['a form id missing from the snapshot', {}, { ...valid, formId: 'block-other' }],
+    ['a form id that belongs to another block type', {}, { ...valid, formId: 'block-hero' }],
+  ])('returns the same 404 for %s', async (_case, options, body) => {
     const { db, batches } = fakeDatabase(options);
 
-    const response = await handleCreateFormSubmission(contactRequest(valid), bindings(db), 'mi-portafolio');
+    const response = await handleCreateFormSubmission(contactRequest(body), bindings(db), 'mi-portafolio');
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'site_not_found', message: 'Este sitio no recibe mensajes.' });
@@ -163,7 +173,7 @@ describe('public contact submission route', () => {
     const form = contactRequest('name=Ana', { 'Content-Type': 'application/x-www-form-urlencoded' });
     expect((await handleCreateFormSubmission(form, bindings(db), 'mi-portafolio')).status).toBe(415);
 
-    const large = contactRequest({ ...valid, message: 'a'.repeat(20 * 1024) });
+    const large = contactRequest({ ...valid, fields: { ...fields, message: 'a'.repeat(20 * 1024) } });
     const response = await handleCreateFormSubmission(large, bindings(db), 'mi-portafolio');
     expect(response.status).toBe(413);
     expect(await response.json()).toMatchObject({ error: 'payload_too_large' });
@@ -171,7 +181,11 @@ describe('public contact submission route', () => {
 
   it('returns field errors for invalid input and a generic error for invalid JSON', async () => {
     const { db } = fakeDatabase();
-    const invalid = await handleCreateFormSubmission(contactRequest({ ...valid, email: 'ana@' }), bindings(db), 'mi-portafolio');
+    const invalid = await handleCreateFormSubmission(
+      contactRequest({ ...valid, fields: { ...fields, email: 'ana@' } }),
+      bindings(db),
+      'mi-portafolio',
+    );
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toEqual({
       error: 'form_invalid',
@@ -181,6 +195,16 @@ describe('public contact submission route', () => {
 
     const malformed = await handleCreateFormSubmission(contactRequest('{"name":'), bindings(db), 'mi-portafolio');
     expect(malformed.status).toBe(400);
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid envelope before reading D1, without field errors', async () => {
+    const { db } = fakeDatabase();
+    for (const body of [fields, { ...valid, formType: 'newsletter' }, { ...valid, formId: '' }, { ...valid, projectId: 'p' }]) {
+      const response = await handleCreateFormSubmission(contactRequest(body), bindings(db), 'mi-portafolio');
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'form_invalid', message: 'Revisa los campos del formulario.' });
+    }
     expect(db.prepare).not.toHaveBeenCalled();
   });
 
@@ -198,7 +222,7 @@ describe('public contact submission route', () => {
 
   it('never returns project identifiers', async () => {
     const { db } = fakeDatabase();
-    for (const body of [valid, { ...valid, website: 'spam' }, { ...valid, email: 'x' }]) {
+    for (const body of [valid, { ...valid, website: 'spam' }, { ...valid, fields: { ...fields, email: 'x' } }]) {
       const response = await handleCreateFormSubmission(contactRequest(body), bindings(db), 'mi-portafolio');
       expect(await response.text()).not.toContain('project-1');
     }
