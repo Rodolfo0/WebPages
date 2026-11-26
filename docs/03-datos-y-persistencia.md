@@ -125,11 +125,34 @@ Los bytes y metadata se administran de forma privada según la membresía y perm
 
 - id
 - project_id
-- name
-- email
-- message
+- site_version_id
+- form_id
+- form_type
+- payload_version
+- payload_json
 - status
 - created_at
+
+Solo los formularios públicos crean filas, con `status = 'unread'`. Los valores enviados se guardan en `payload_json` como un objeto JSON; D1 rechaza cualquier otro valor. El resto de columnas son metadata para identificar e interpretar ese objeto:
+
+- `form_type` indica qué formulario lo produjo (hoy solo `contact`).
+- `payload_version` indica la forma del objeto para ese tipo. El par (`form_type`, `payload_version`) selecciona en `resources/messages/domain/forms.ts` el schema con el que se lee; `readStoredFormSubmission` devuelve `null` si no conoce el par o el objeto ya no cumple el schema. Cambiar los campos de un tipo exige una versión nueva y conservar o convertir la anterior.
+- `form_id` es el id del bloque que mostró el formulario.
+- `site_version_id` es el snapshot publicado que contenía ese bloque, y permite recuperar sus textos. Queda en `null` si esa versión se borra, de modo que podar versiones nunca borra mensajes.
+
+El servidor resuelve `project_id` y `site_version_id` desde el slug y la versión publicada, y comprueba en ese snapshot que `form_id` es un formulario activo del tipo indicado; nunca acepta esos valores del cliente sin verificarlos. No se guardan IP, user agent ni otra metadata. Las longitudes de los campos (para `contact`, 100, 254 y 5000 caracteres) se validan en el servidor antes de serializar.
+
+Para `contact`, versión 1, el objeto es `{"name": "...", "email": "...", "message": "..."}`. La migración `0004` recrea la tabla desde el formato anterior de una columna por campo; si había filas, las convierte a ese objeto con `form_id = 'legacy-contact'` y `site_version_id` nulo.
+
+### form_submission_rate_limits
+
+- project_id
+- bucket_key
+- window_ms
+- window_start
+- count
+
+Contadores de ventana fija del formulario público. La clave primaria es `(project_id, bucket_key, window_ms, window_start)`. `bucket_key` vale `project` o `ip:<HMAC-SHA256>`, calculado con el secreto `FORM_RATE_LIMIT_SECRET`, así que la dirección IP nunca se guarda. Cada envío incrementa sus contadores en el mismo batch que inserta el mensaje, y ese batch borra las filas con más de 48 horas mediante el índice de `window_start`. Se eliminan en cascada con el proyecto.
 
 ## R2
 
@@ -146,6 +169,8 @@ Crear índices para las consultas reales del MVP:
 - Versiones por project_id y fecha.
 - Assets por project_id.
 - Mensajes por project_id, estado y fecha.
+- Mensajes por site_version_id, para la clave foránea.
+- Contadores del formulario por fecha de inicio de ventana, para la limpieza.
 
 Los timestamps se guardan como milisegundos Unix en columnas enteras. Los estados permitidos son `draft`, `published` y `archived` para proyectos; `active` e `inactive` para membresías; `unread`, `read` y `archived` para mensajes.
 

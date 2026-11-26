@@ -4,7 +4,7 @@ import { blockThemeStyle } from './block-theme-style';
 import styles from './block.module.css';
 
 /** Property names the renderer receives outside the block props; schemas must reject them. */
-export const BLOCK_RENDER_PROP_NAMES = ['theme', 'blockId', 'onAction'] as const;
+export const BLOCK_RENDER_PROP_NAMES = ['theme', 'blockId', 'onAction', 'contactFormEndpoint'] as const;
 
 export type HeadingLevel = 1 | 2 | 3;
 export type BlockAlignment = 'left' | 'center' | 'right';
@@ -22,6 +22,11 @@ export type BlockRenderContext = {
   theme: ThemeTokens;
   /** Optional editor hook; the public renderer ignores it. */
   onAction?: (action: BlockAction) => void;
+  /**
+   * Public route that receives contact form messages. Only the published-site renderer passes it;
+   * without it (editor canvas, previews) the form renders disabled.
+   */
+  contactFormEndpoint?: string;
 };
 
 /**

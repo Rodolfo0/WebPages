@@ -42,7 +42,8 @@ const PORTFOLIO_PROPS: Record<PortfolioBlockType, Record<string, JsonValue>> = {
   // Testimonials ship hidden: the block exists so the owner can enable it later, but a new
   // portfolio should not open with social proof the owner has not collected yet.
   testimonials: { hidden: true },
-  contact: { anchor: 'contacto' },
+  // The form ships enabled so a first publication can already receive messages (Issue 18).
+  contact: { anchor: 'contacto', formEnabled: true },
   footer: {},
 };
 

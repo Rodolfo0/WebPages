@@ -461,6 +461,8 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       columns: 'Columnas', linkStyle: 'Estilo de enlaces', title: 'Título', summary: 'Resumen',
       quote: 'Opinión', person: 'Persona', role: 'Cargo', period: 'Periodo', description: 'Descripción',
       url: 'Enlace', linkLabel: 'Texto del enlace', label: 'Etiqueta', name: 'Nombre',
+      formEnabled: 'Formulario de contacto', formSubmitLabel: 'Botón del formulario',
+      formSuccessMessage: 'Mensaje de confirmación',
     };
     return labels[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase());
   }
@@ -529,6 +531,8 @@ function ProjectEditorSession({ projectId }: { projectId: string }) {
       accentColor: 7,
       email: 254,
       phone: 40,
+      formSubmitLabel: 40,
+      formSuccessMessage: 160,
     };
     return limits[key];
   }

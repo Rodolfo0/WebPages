@@ -37,9 +37,14 @@ resources/
   projects/
     domain/                   # reglas de permisos y acceso por proyecto
     server/                   # consultas de membresía y autorización
+  messages/
+    domain/                   # schemas y política de los formularios públicos
+    server/                   # ruta pública, límite de envíos y guardado en D1
+    ui/                       # formulario que muestra el bloque de contacto
   <resource>/
     ...                       # se crea al implementar esa capacidad
 shared/                       # código realmente compartido entre recursos
+  http/                       # lectura de cuerpos con límite y comprobación de origen
 database/
   d1/                         # esquema, acceso, configuración y migraciones D1
   supabase/                   # configuración y migraciones PostgreSQL de Auth

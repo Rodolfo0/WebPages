@@ -235,6 +235,15 @@ export const assets = sqliteTable(
   ],
 );
 
+/**
+ * Messages sent through the public forms of a published site.
+ *
+ * The submitted values live in `payload_json`, a JSON object whose shape is defined in code by the
+ * pair (`form_type`, `payload_version`), so new form types need no schema change. `form_id` is the id
+ * of the block that rendered the form and `site_version_id` the published snapshot it belonged to;
+ * together they identify which form, with which labels, produced the message. The snapshot reference
+ * becomes null if that version is ever deleted, so pruning versions never deletes messages.
+ */
 export const formSubmissions = sqliteTable(
   'form_submissions',
   {
@@ -242,16 +251,23 @@ export const formSubmissions = sqliteTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    email: text('email').notNull(),
-    message: text('message').notNull(),
+    siteVersionId: text('site_version_id')
+      .references(() => siteVersions.id, { onDelete: 'set null' }),
+    formId: text('form_id').notNull(),
+    formType: text('form_type').notNull(),
+    payloadVersion: integer('payload_version').notNull(),
+    payloadJson: text('payload_json').notNull(),
     status: text('status', { enum: FORM_SUBMISSION_STATUSES }).notNull().default('unread'),
     createdAt: createdAtColumn(),
   },
   (table) => [
-    check('form_submissions_name_nonempty', sql`length(trim(${table.name})) > 0`),
-    check('form_submissions_email_nonempty', sql`length(trim(${table.email})) > 0`),
-    check('form_submissions_message_nonempty', sql`length(trim(${table.message})) > 0`),
+    check('form_submissions_form_id_nonempty', sql`length(trim(${table.formId})) > 0`),
+    check('form_submissions_form_type_nonempty', sql`length(trim(${table.formType})) > 0`),
+    check('form_submissions_payload_version_positive', sql`${table.payloadVersion} > 0`),
+    check(
+      'form_submissions_payload_json_object',
+      sql`json_valid(${table.payloadJson}) and json_type(${table.payloadJson}) = 'object'`,
+    ),
     check(
       'form_submissions_status_valid',
       sql`${table.status} in ('unread', 'read', 'archived')`,
@@ -261,5 +277,35 @@ export const formSubmissions = sqliteTable(
       table.status,
       table.createdAt,
     ),
+    index('form_submissions_site_version_id_idx').on(table.siteVersionId),
+  ],
+);
+
+/**
+ * Fixed-window counters for the public contact form.
+ *
+ * `bucket_key` is either `project` or `ip:<HMAC-SHA256 hex>`; the raw address is never stored. Each
+ * submission increments one row per window in the same D1 batch that inserts the message, so
+ * concurrent requests cannot exceed a limit. Rows older than every window are deleted on write.
+ */
+export const formSubmissionRateLimits = sqliteTable(
+  'form_submission_rate_limits',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    bucketKey: text('bucket_key').notNull(),
+    windowMs: integer('window_ms').notNull(),
+    windowStart: integer('window_start').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({
+      name: 'form_submission_rate_limits_pk',
+      columns: [table.projectId, table.bucketKey, table.windowMs, table.windowStart],
+    }),
+    check('form_submission_rate_limits_window_positive', sql`${table.windowMs} > 0`),
+    check('form_submission_rate_limits_count_nonnegative', sql`${table.count} >= 0`),
+    index('form_submission_rate_limits_window_start_idx').on(table.windowStart),
   ],
 );
