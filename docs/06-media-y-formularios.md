@@ -39,16 +39,21 @@ La política anterior se aplica en servidor antes de guardar el objeto en R2. El
 
 ## Formulario público
 
-El bloque de contacto debe enviar mensajes a una ruta pública asociada al proyecto publicado. La ruta debe:
+El bloque `contact` muestra un formulario cuando su prop `formEnabled` está activa. La plantilla de portafolio la activa por defecto; los bloques creados antes de esta prop la reciben desactivada. El texto del botón (`formSubmitLabel`) y el mensaje de confirmación (`formSuccessMessage`) se editan desde el panel de propiedades. El documento nunca guarda la URL de envío: el renderizador público pasa `contactFormEndpoint` en el contexto del bloque y, sin ese valor (por ejemplo en el editor), el formulario se muestra deshabilitado como vista previa.
 
-- Resolver el proyecto por slug y versión publicada.
-- Validar nombre, email y mensaje.
-- Ignorar o marcar envíos con honeypot.
-- Aplicar límite por IP o por ventana de tiempo.
-- Guardar el mensaje en form_submissions.
-- No revelar datos privados del proyecto ni de sus miembros.
+El formulario envía JSON a `POST /api/sites/{slug}/messages`. La lógica vive en `resources/messages/`, y el schema de `resources/messages/domain/submission.ts` valida tanto en el navegador como en el servidor.
 
-La bandeja privada permitirá listar mensajes, abrir el detalle, marcar como leído y eliminar o archivar.
+- **Resolución:** el servidor busca el proyecto por slug, exige que no esté archivado y lee solo el snapshot de `published_version_id`. El snapshot debe tener un bloque `contact` visible con `formEnabled === true`. El borrador nunca habilita el formulario.
+- **Campos:** `name` (1–100 caracteres), `email` (email válido, hasta 254) y `message` (1–5000). Se normalizan a NFKC y se recortan. Se rechazan caracteres de control, salvo saltos de línea y tabuladores en el mensaje, así como cualquier clave desconocida.
+- **Honeypot:** el campo oculto `website` queda fuera del orden de tabulación y del árbol de accesibilidad. Si llega con contenido, la respuesta es la misma que la de un envío válido (`201`), pero el mensaje no se guarda. El intento sí consume el límite de envíos.
+- **Límite de envíos:** ventanas fijas de 3 envíos cada 10 minutos y 10 cada 24 horas por IP y proyecto, más 60 por hora por proyecto. La IP proviene de `CF-Connecting-IP` y se guarda solo como HMAC con `FORM_RATE_LIMIT_SECRET`. Sin ese secreto, solo se aplica el límite por proyecto. Los contadores y la inserción se ejecutan en un único batch de D1, de modo que los envíos simultáneos no superan el límite. Al excederlo, la ruta responde `429` con `Retry-After`.
+- **Guardado:** el mensaje se inserta en `form_submissions` con `status = 'unread'`. No se guardan IP, user agent ni metadata adicional.
+- **Privacidad:** la ruta exige `Origin` igual al de la aplicación (`403` si no) y solo acepta `application/json` (`415`) de hasta 16 KiB (`413`). Responde con el mismo `404` si el slug no existe, no está publicado, está archivado o no ofrece el formulario. Ninguna respuesta incluye IDs del proyecto ni datos de sus miembros, y la ruta no registra el contenido de la petición.
+- **Respuestas:** `201 {"ok":true}`; `400` con `fields` por campo; `503` genérico ante fallos de D1. Todas usan `Cache-Control: no-store`.
+
+El envío requiere JavaScript, porque la página pública hidrata React. El envío sin JavaScript (formulario `x-www-form-urlencoded` con redirección) y un captcha como Turnstile quedan como mejoras posteriores, si el honeypot y el límite no bastan.
+
+La bandeja privada (Issue 19) permitirá listar mensajes, abrir el detalle, marcar como leído y eliminar o archivar.
 
 ## Exportación Astro
 

@@ -8,6 +8,7 @@ import {
   collectSiteDocumentAssetIds,
   createSiteDocumentSchema,
 } from '../../../site-document';
+import { documentAcceptsContactMessages } from '../../../messages';
 import { createPortfolioTemplate } from '../../domain/portfolio-template';
 
 /**
@@ -65,6 +66,14 @@ describe('portfolio template', () => {
     const testimonials = parsed.pages[0].blocks.find((block) => block.type === 'testimonials');
 
     expect(testimonials?.props.hidden).toBe(true);
+  });
+
+  it('ships the contact form enabled, so a first publication receives messages', () => {
+    const template = createPortfolioTemplate('Estudio Rivera', 'estudio-rivera');
+    const contact = template.pages[0].blocks.find((block) => block.type === 'contact');
+
+    expect(contact?.props.formEnabled).toBe(true);
+    expect(documentAcceptsContactMessages(template)).toBe(true);
   });
 
   it('gives every block a unique id', () => {

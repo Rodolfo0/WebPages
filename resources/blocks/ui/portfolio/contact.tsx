@@ -12,15 +12,16 @@ import {
   shortTextSchema,
 } from '../../domain/shared-props';
 import { BlockActions, type BlockActionItem } from '../block-parts';
+import { ContactForm } from '../../../messages/ui';
 import { BlockSection } from '../block-renderer';
 import styles from '../portfolio-blocks.module.css';
 
 /**
  * Contact details and social links.
  *
- * Issue 10 groups "contacto y redes sociales" into one block, so the public contact form is not
- * part of it: the form arrives with its own issue and must post to a server route, not to a block.
- * Here the block only describes how to reach the author.
+ * Issue 10 groups "contacto y redes sociales" into one block. Issue 18 adds an optional public form:
+ * `formEnabled` decides whether the published snapshot accepts messages, and the form posts to the
+ * route given by the renderer context (`contactFormEndpoint`), never to a URL stored in the document.
  *
  * The email is a plain `mailto:` link and the phone a `tel:` link; both are validated by scheme so a
  * document cannot smuggle an executable URL into an anchor.
@@ -50,6 +51,9 @@ export const contactPropsSchema = z.strictObject({
   align: blockAlignmentSchema.default('center'),
   spacing: blockSpacingSchema.default('comfortable'),
   accentColor: optionalAccentColorSchema,
+  formEnabled: z.boolean().default(false),
+  formSubmitLabel: shortTextSchema(40, 'El botón del formulario').default('Enviar mensaje'),
+  formSuccessMessage: shortTextSchema(160, 'El mensaje de confirmación').default('Gracias, tu mensaje se envió.'),
   hidden: hiddenSchema,
   anchor: anchorSchema,
 });
@@ -77,10 +81,13 @@ export const contactBlock = defineBlock<ContactProps>({
     linkStyle: 'buttons',
     align: 'center',
     spacing: 'comfortable',
+    formEnabled: false,
+    formSubmitLabel: 'Enviar mensaje',
+    formSuccessMessage: 'Gracias, tu mensaje se envió.',
   }),
   // Contact details reference no assets.
   assetIdsFromProps: () => [],
-  reactComponent: ({ props, blockId, theme }) => {
+  reactComponent: ({ props, blockId, theme, contactFormEndpoint }) => {
     const style = props.linkStyle === 'buttons' ? 'button' : 'text';
 
     const items: BlockActionItem[] = [
@@ -127,6 +134,14 @@ export const contactBlock = defineBlock<ContactProps>({
             ) : null}
           </ul>
           <BlockActions items={items} />
+          {props.formEnabled ? (
+            <ContactForm
+              idPrefix={blockId}
+              endpoint={contactFormEndpoint}
+              submitLabel={props.formSubmitLabel}
+              successMessage={props.formSuccessMessage}
+            />
+          ) : null}
         </div>
       </BlockSection>
     );
