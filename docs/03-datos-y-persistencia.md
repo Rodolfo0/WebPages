@@ -131,6 +131,16 @@ Los bytes y metadata se administran de forma privada según la membresía y perm
 - status
 - created_at
 
+### form_submission_rate_limits
+
+- project_id
+- bucket_key
+- window_ms
+- window_start
+- count
+
+Contadores de ventana fija del formulario público. La clave primaria es `(project_id, bucket_key, window_ms, window_start)`. `bucket_key` vale `project` o `ip:<HMAC-SHA256>`, calculado con el secreto `FORM_RATE_LIMIT_SECRET`, así que la dirección IP nunca se guarda. Cada envío incrementa sus contadores en el mismo batch que inserta el mensaje, y ese batch borra las filas con más de 48 horas mediante el índice de `window_start`. Se eliminan en cascada con el proyecto.
+
 ## R2
 
 R2 almacenará los bytes de imágenes y exportaciones. D1 solo conservará metadata, relaciones de propiedad y claves de objetos.
@@ -146,6 +156,7 @@ Crear índices para las consultas reales del MVP:
 - Versiones por project_id y fecha.
 - Assets por project_id.
 - Mensajes por project_id, estado y fecha.
+- Contadores del formulario por fecha de inicio de ventana, para la limpieza.
 
 Los timestamps se guardan como milisegundos Unix en columnas enteras. Los estados permitidos son `draft`, `published` y `archived` para proyectos; `active` e `inactive` para membresías; `unread`, `read` y `archived` para mensajes.
 

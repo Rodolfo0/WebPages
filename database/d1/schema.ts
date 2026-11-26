@@ -263,3 +263,32 @@ export const formSubmissions = sqliteTable(
     ),
   ],
 );
+
+/**
+ * Fixed-window counters for the public contact form.
+ *
+ * `bucket_key` is either `project` or `ip:<HMAC-SHA256 hex>`; the raw address is never stored. Each
+ * submission increments one row per window in the same D1 batch that inserts the message, so
+ * concurrent requests cannot exceed a limit. Rows older than every window are deleted on write.
+ */
+export const formSubmissionRateLimits = sqliteTable(
+  'form_submission_rate_limits',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    bucketKey: text('bucket_key').notNull(),
+    windowMs: integer('window_ms').notNull(),
+    windowStart: integer('window_start').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({
+      name: 'form_submission_rate_limits_pk',
+      columns: [table.projectId, table.bucketKey, table.windowMs, table.windowStart],
+    }),
+    check('form_submission_rate_limits_window_positive', sql`${table.windowMs} > 0`),
+    check('form_submission_rate_limits_count_nonnegative', sql`${table.count} >= 0`),
+    index('form_submission_rate_limits_window_start_idx').on(table.windowStart),
+  ],
+);
