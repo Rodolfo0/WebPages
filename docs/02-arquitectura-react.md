@@ -40,6 +40,7 @@ resources/
   <resource>/
     ...                       # se crea al implementar esa capacidad
 shared/                       # código realmente compartido entre recursos
+  http/                       # lectura de cuerpos con límite y comprobación de origen
 database/
   d1/                         # esquema, acceso, configuración y migraciones D1
   supabase/                   # configuración y migraciones PostgreSQL de Auth

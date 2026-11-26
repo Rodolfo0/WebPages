@@ -8,6 +8,7 @@ import { assets } from '../../../database/d1/schema';
 import { createDb } from '../../../database/d1/client';
 import { isAssetInActivePublishedVersion } from '../../projects/server/published-assets';
 import { requireProjectPermission } from '../../projects/server/access';
+import { readLimitedBody, RequestBodyTooLargeError } from '../../../shared/http';
 
 type AssetBindings = {
   DB?: D1Database;
@@ -43,40 +44,16 @@ async function readAssetRenamePayload(request: Request) {
   const contentType = request.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
   if (contentType !== 'application/json') throw new AssetInputError('Envía el nombre de la imagen como JSON.');
 
-  const declaredLength = request.headers.get('content-length');
-  if (declaredLength && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > MAX_ASSET_RENAME_REQUEST_BYTES)) {
-    throw new AssetInputError('La solicitud para renombrar la imagen es demasiado grande.');
-  }
-
-  if (!request.body) throw new AssetInputError('La solicitud para renombrar la imagen no es válida.');
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
+  let bytes: Uint8Array;
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      byteLength += value.byteLength;
-      if (byteLength > MAX_ASSET_RENAME_REQUEST_BYTES) {
-        void reader.cancel().catch(() => undefined);
-        throw new AssetInputError('La solicitud para renombrar la imagen es demasiado grande.');
-      }
-      chunks.push(value);
-    }
+    bytes = await readLimitedBody(request, MAX_ASSET_RENAME_REQUEST_BYTES);
   } catch (error) {
-    void reader.cancel().catch(() => undefined);
-    if (error instanceof AssetInputError) throw error;
+    if (error instanceof RequestBodyTooLargeError) {
+      throw new AssetInputError('La solicitud para renombrar la imagen es demasiado grande.');
+    }
     throw new AssetInputError('No se pudo leer la solicitud para renombrar la imagen.');
-  } finally {
-    reader.releaseLock();
   }
-
-  const bytes = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+  if (!request.body) throw new AssetInputError('La solicitud para renombrar la imagen no es válida.');
   try {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
   } catch {
@@ -183,41 +160,16 @@ export function handleUploadAsset(request: Request, bindings: AssetBindings, pro
     try {
       const contentType = request.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
       if (contentType !== 'multipart/form-data') throw new AssetInputError('Envía la imagen como multipart/form-data.');
-      const maxRequestBytes = MAX_ASSET_SIZE + MAX_ASSET_MULTIPART_OVERHEAD;
-      const declaredLength = request.headers.get('content-length');
-      if (declaredLength && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maxRequestBytes)) {
-        throw new AssetInputError('La solicitud supera el tamaño máximo permitido.', 413);
+      let body: Uint8Array<ArrayBuffer>;
+      try {
+        body = await readLimitedBody(request, MAX_ASSET_SIZE + MAX_ASSET_MULTIPART_OVERHEAD);
+      } catch (error) {
+        if (error instanceof RequestBodyTooLargeError) {
+          throw new AssetInputError('La solicitud supera el tamaño máximo permitido.', 413);
+        }
+        throw new AssetInputError('No se pudo leer la imagen enviada.');
       }
       if (!request.body) throw new AssetInputError('Selecciona una imagen para subirla.');
-
-      const reader = request.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let byteLength = 0;
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          byteLength += value.byteLength;
-          if (byteLength > maxRequestBytes) {
-            void reader.cancel().catch(() => undefined);
-            throw new AssetInputError('La solicitud supera el tamaño máximo permitido.', 413);
-          }
-          chunks.push(value);
-        }
-      } catch (error) {
-        void reader.cancel().catch(() => undefined);
-        if (error instanceof AssetInputError) throw error;
-        throw new AssetInputError('No se pudo leer la imagen enviada.');
-      } finally {
-        reader.releaseLock();
-      }
-
-      const body = new Uint8Array(byteLength);
-      let offset = 0;
-      for (const chunk of chunks) {
-        body.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
       const headers = new Headers(request.headers);
       headers.delete('content-length');
       let form: FormData;

@@ -15,8 +15,4 @@ export function authErrorResponse(error: unknown) {
   }, 502);
 }
 
-export function isSameOrigin(request: Request, required = false) {
-  const origin = request.headers.get('origin');
-  if (!origin) return !required && request.headers.get('sec-fetch-site') !== 'cross-site';
-  return origin === new URL(request.url).origin;
-}
+export { isSameOrigin } from '../../../shared/http';

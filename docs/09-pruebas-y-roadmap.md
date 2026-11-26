@@ -27,7 +27,7 @@ pnpm test:e2e
 
 ### Ubicación de las pruebas
 
-Cada recurso contiene sus pruebas en `resources/<resource>/tests/`. Las
+Cada recurso contiene sus pruebas en `resources/<resource>/tests/`; las utilidades de `shared/` guardan las suyas en `shared/<módulo>/tests/`. Las
 subcarpetas indican el nivel:
 
 ```text

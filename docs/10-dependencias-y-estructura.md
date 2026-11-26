@@ -101,6 +101,7 @@ resources/
   <resource>/
     ...                      # cada capacidad se agrega al implementarla
 shared/                      # utilidades genuinamente compartidas
+  http/                      # lectura de cuerpos con límite y comprobación de origen
 database/
   d1/                        # acceso D1, esquema y configuración de Drizzle
     migrations/              # SQL, snapshots y journal de D1
