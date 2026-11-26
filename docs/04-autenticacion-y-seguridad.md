@@ -124,6 +124,8 @@ Cada proyecto tiene un único rol de sistema `owner`, asignado a entre una y tre
 
 El acceso público a archivos tiene una excepción acotada: solo se sirve un asset si pertenece al proyecto y su ID está en la lista de referencias calculada por el servidor para la versión publicada actualmente. Cada bloque declara qué props contienen referencias a assets; el servidor valida el documento antes de guardar esa lista con el snapshot inmutable. La lectura y administración desde el editor siguen siendo privadas y dependen de la membresía y los permisos; que un cliente conozca un `assetId` o `projectId` no concede acceso.
 
+El formulario de contacto es la otra excepción pública. `POST /api/sites/{slug}/messages` no requiere sesión, pero solo crea mensajes en un proyecto no archivado cuyo snapshot publicado tenga un bloque de contacto visible con `formEnabled`. Exige `Origin` igual al de la aplicación, acepta solo JSON de hasta 16 KiB y responde con el mismo `404` cuando el slug no existe, no está publicado, está archivado o no ofrece el formulario. Sus respuestas no incluyen IDs del proyecto ni datos de sus miembros. El límite por IP usa un HMAC con `FORM_RATE_LIMIT_SECRET`; la IP en claro no se guarda ni se registra. La ruta no escribe logs con el cuerpo, el email, el nombre, el mensaje ni la IP.
+
 ## Reglas de seguridad
 
 - No almacenar contraseñas, hashes, tokens de sesión ni códigos de recuperación en D1.
@@ -148,3 +150,4 @@ El acceso público a archivos tiene una excepción acotada: solo se sirve un ass
 - Subida de archivos no permitidos.
 - Enlaces con protocolos inseguros.
 - Recuperación de contraseña sin revelar si un email existe.
+- Formulario público: origen, tamaño, honeypot, límite de envíos y `404` uniforme sin datos del proyecto.

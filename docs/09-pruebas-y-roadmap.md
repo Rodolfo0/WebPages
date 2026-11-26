@@ -20,6 +20,17 @@ pnpm test:e2e
 - La integración también comprueba el rechazo de sesión ausente, el cambio de
   contraseña sin usuario y la preparación/validación de estado del enlace de
   recuperación sin enviar correos ni consumir un token real.
+- La integración del formulario de contacto
+  (`resources/messages/tests/integration/`) crea una D1 local temporal con
+  `getPlatformProxy` de Wrangler, le aplica las migraciones del repositorio y
+  la borra al terminar, sin tocar la D1 local de desarrollo. Inserta snapshots
+  publicados directamente, porque la publicación (Issue 21) aún no existe, y
+  comprueba el guardado, el `404` uniforme, el honeypot, los límites por IP y
+  por proyecto, la concurrencia y la limpieza de contadores. También llama la
+  ruta real en el Worker local. El servidor de desarrollo de Vinext bloquea
+  por sí mismo los orígenes ajenos antes del handler; ese caso se cubre en las
+  pruebas unitarias. El envío desde la página publicada queda para el E2E del
+  Issue 28, cuando exista `/s/:slug` (Issue 22).
 - `test:e2e` recorre la interfaz con Playwright: inicia sesión con una cuenta de
   prueba ya confirmada, comprueba la redirección a `/app/projects`, cierra sesión
   desde el panel de proyectos y valida en el servidor que la sesión terminó. No

@@ -131,6 +131,8 @@ Los bytes y metadata se administran de forma privada según la membresía y perm
 - status
 - created_at
 
+Solo el formulario público crea filas, con `status = 'unread'`. El servidor resuelve `project_id` desde el slug y la versión publicada; nunca lo acepta del cliente. No se guardan IP, user agent ni metadata adicional. Las longitudes máximas (100, 254 y 5000 caracteres) se validan en el servidor; D1 solo comprueba que los campos no estén vacíos.
+
 ### form_submission_rate_limits
 
 - project_id
